@@ -71,8 +71,8 @@ async function main() {
   };
 
   
-  await createUser("Sharoon", "sharoon@example.com", "Password123!", agentRole.id,teamKohinoor.id);
-  await createUser("Shahwaiz", "shahwaiz@example.com", "Password123!", agentRole.id,teamKohinoor.id);
+  await createUser("Sharoon", "sharoon@example.com", "Password123!", agentRole.id,teams.Kohinoor.id);
+  await createUser("Shahwaiz", "shahwaiz@example.com", "Password123!", agentRole.id,teams.Kohinoor.id);
 
   // -----------------------------
   // TEAM C
