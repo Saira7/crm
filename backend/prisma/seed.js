@@ -1,23 +1,188 @@
-const { PrismaClient } = require('@prisma/client');
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcrypt";
+
 const prisma = new PrismaClient();
-const bcrypt = require('bcrypt');
 
-async function main() {
-  const pw = await bcrypt.hash('password', 10);
-  const admin = await prisma.role.upsert({ where: { name: 'admin' }, update: {}, create: { name: 'admin' } });
-  const tl = await prisma.role.upsert({ where: { name: 'team_lead' }, update: {}, create: { name: 'team_lead' } });
-  const rep = await prisma.role.upsert({ where: { name: 'sales_rep' }, update: {}, create: { name: 'sales_rep' } });
-
-  const teamA = await prisma.team.upsert({ where: { name: 'Sales Team A' }, update: {}, create: { name: 'Sales Team A' } });
-
-  await prisma.user.upsert({ where: { email: 'john@company.com' }, update: {}, create: { name: 'John Doe', email: 'john@company.com', password: pw, roleId: admin.id, teamId: teamA.id, ipAddress: '192.168.1.100' } });
-  await prisma.user.upsert({ where: { email: 'sarah@company.com' }, update: {}, create: { name: 'Sarah Wilson', email: 'sarah@company.com', password: pw, roleId: tl.id, teamId: teamA.id } });
-  await prisma.user.upsert({ where: { email: 'mike@company.com' }, update: {}, create: { name: 'Mike Davis', email: 'mike@company.com', password: pw, roleId: rep.id, teamId: teamA.id } });
-
-  await prisma.lead.createMany({ data: [
-    { name: 'Acme Corporation', contactPerson: 'Jane Smith', email: 'jane@acme.com', status: 'new', assignedToId: 1, teamName: 'Sales Team A', dueDate: new Date('2024-11-05'), value: 50000, tags: ['enterprise','high-priority'] },
-    { name: 'Tech Innovations Ltd', contactPerson: 'Bob Johnson', email: 'bob@techinno.com', status: 'contacted', assignedToId: 2, teamName: 'Sales Team A', dueDate: new Date('2024-11-04'), value: 30000, tags: ['demo-completed'] }
-  ]});
+async function createUser(name, email, password, roleId, teamId = null) {
+  return prisma.user.create({
+    data: {
+      name,
+      email,
+      password: await bcrypt.hash(password, 10),
+      roleId,
+      teamId,
+    },
+  });
 }
 
-main().catch(e => console.error(e)).finally(() => prisma.$disconnect());
+async function main() {
+  console.log("Starting Seeding...");
+
+  // -----------------------------
+  // ROLES
+  // -----------------------------
+  const managerRole = await prisma.role.upsert({
+    where: { name: "Manager" },
+    update: {},
+    create: { name: "Manager", description: "Management role" },
+  });
+
+  const teamLeadRole = await prisma.role.upsert({
+    where: { name: "Team Lead" },
+    update: {},
+    create: { name: "Team Lead", description: "Leads a team" },
+  });
+
+  const agentRole = await prisma.role.upsert({
+    where: { name: "Agent" },
+    update: {},
+    create: { name: "Agent", description: "Regular team member" },
+  });
+
+  // -----------------------------
+  // TEAMS
+  // -----------------------------
+  const teams = {
+    A: await prisma.team.upsert({
+      where: { name: "Team A" },
+      update: {},
+      create: { name: "Team A", description: "Team A CRM Agents" },
+    }),
+    B: await prisma.team.upsert({
+      where: { name: "Team B" },
+      update: {},
+      create: { name: "Team B", description: "Team B CRM Agents" },
+    }),
+    C: await prisma.team.upsert({
+      where: { name: "Team C" },
+      update: {},
+      create: { name: "Team C", description: "Team C CRM Agents" },
+    }),
+    D: await prisma.team.upsert({
+      where: { name: "Team D" },
+      update: {},
+      create: { name: "Team D", description: "Team D CRM Agents" },
+    }),
+    Kohinoor: await prisma.team.upsert({
+      where: { name: "Team Kohinoor" },
+      update: {},
+      create: { name: "Team Kohinoor", description: "Special team" },
+    }),
+  };
+
+  
+  await createUser("Sharoon", "sharoon@example.com", "Password123!", agentRole.id,teamKohinoor.id);
+  await createUser("Shahwaiz", "shahwaiz@example.com", "Password123!", agentRole.id,teamKohinoor.id);
+
+  // -----------------------------
+  // TEAM C
+  // -----------------------------
+  const teamC_leads = ["Akasha Naz", "Mehreen Munir"];
+  for (const lead of teamC_leads) {
+    await createUser(lead, `${lead.toLowerCase().replace(/ /g, "")}@example.com`,
+      "Password123!", teamLeadRole.id, teams.C.id);
+  }
+
+  const teamC_members = [
+    "Abdul Rehman", "Hamza Khalid", "Musab Umair", "Haseeb Shahid", "Zain ul Abidin",
+    "Muhammad Faisal", "Muhammad Waleed", "Sayeda Amna", "Neha Khan",
+    "Nabeera Imran", "Mahnoor", "Ayesha Noor"
+  ];
+
+  for (const member of teamC_members) {
+    await createUser(
+      member,
+      `${member.toLowerCase().replace(/ /g, "")}@example.com`,
+      "Password123!",
+      agentRole.id,
+      teams.C.id
+    );
+  }
+
+  // -----------------------------
+  // TEAM A
+  // -----------------------------
+  const teamA_leads = ["Eman", "Asima"];
+  for (const lead of teamA_leads) {
+    await createUser(lead, `${lead.toLowerCase()}@example.com`,
+      "Password123!", teamLeadRole.id, teams.A.id);
+  }
+
+  const teamA_members = [
+    "Rubab Sehar", "Shazeena Mariam", "Farah Zanib", "Ali Afzal", "Rehan Shahzad",
+    "Turab Haider", "Waqas Akram", "Abdur Rehman", "Uswa Adnan"
+  ];
+
+  for (const member of teamA_members) {
+    await createUser(
+      member,
+      `${member.toLowerCase().replace(/ /g, "")}@example.com`,
+      "Password123!",
+      agentRole.id,
+      teams.A.id
+    );
+  }
+
+  // -----------------------------
+  // TEAM D
+  // -----------------------------
+  await createUser(
+    "Mishal Fatima",
+    "mishal@example.com",
+    "Password123!",
+    teamLeadRole.id,
+    teams.D.id
+  );
+
+  const teamD_members = [
+    "Nouman Ahmed", "Maheen Abbas", "Faizan Ali", "Abdullah Zahid",
+    "Mukaram Masoom", "Wazooha Imran", "Sonia Shah", "Ammar Bin Yasir", "Abdullah Nawaz"
+  ];
+
+  for (const member of teamD_members) {
+    await createUser(
+      member,
+      `${member.toLowerCase().replace(/ /g, "")}@example.com`,
+      "Password123!",
+      agentRole.id,
+      teams.D.id
+    );
+  }
+
+  // -----------------------------
+  // TEAM B
+  // -----------------------------
+  await createUser("Saira", "saira@example.com", "Password123!", teamLeadRole.id, teams.B.id);
+
+  const teamB_members = [
+    "Noor ul Huda", "Khizra", "Javeria Latif", "Muhammad Ahmed", "Ali Hamza",
+    "Muhammad Ubaid Ullah", "Muhammad Umair", "Umar Raza", "Muhammad Junaid",
+    "Areeba Shahzadi", "Muhammad Qamar ul Islam"
+  ];
+
+  for (const member of teamB_members) {
+    await createUser(
+      member,
+      `${member.toLowerCase().replace(/ /g, "")}@example.com`,
+      "Password123!",
+      agentRole.id,
+      teams.B.id
+    );
+  }
+
+  // -----------------------------
+  // TEAM KOHINOOR
+  // -----------------------------
+  await createUser("Hadi", "hadi@example.com", "Password123!", teamLeadRole.id, teams.Kohinoor.id);
+
+  console.log("✅ Seeding Completed Successfully!");
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

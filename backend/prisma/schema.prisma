@@ -11,9 +11,9 @@ datasource db {
 model Role {
   id              Int              @id @default(autoincrement())
   name            String           @unique
-  description     String?
-  ipRestricted    Boolean          @default(true)  // Changed default to true
-  allowedIPs      String[]         @default(["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]) // Default company IPs
+  description     String?          // optional description
+  ipRestricted    Boolean          @default(true)
+  allowedIPs      String[]         @default(["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"])
   users           User[]
   ipRestrictions  IPRestriction[]
   createdAt       DateTime         @default(now())
@@ -21,26 +21,27 @@ model Role {
 }
 
 model Team {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  description String?
-  members   User[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?  // optional description
+  members     User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model User {
   id             Int      @id @default(autoincrement())
   name           String
-  email          String   @unique
+  email          String  @unique   
   password       String
   roleId         Int
   role           Role     @relation(fields: [roleId], references: [id])
   teamId         Int?
   team           Team?    @relation(fields: [teamId], references: [id])
+  description    String?  // optional description on user
   allowedIPs     String[] @default([])
-  ipRestricted   Boolean  @default(true)  // Changed default to true
-  ipExempt       Boolean  @default(false) // New field: completely exempt from IP restrictions
+  ipRestricted   Boolean  @default(true)
+  ipExempt       Boolean  @default(false)
   lastLoginIP    String?
   lastLoginAt    DateTime?
   createdAt      DateTime @default(now())
@@ -84,7 +85,7 @@ model Lead {
   businessNature        String
   landline              String?
   mobile                String
-  email                 String
+  email                 String?
   website               String?
   
   // Customer/Owner Details
@@ -148,7 +149,7 @@ model Lead {
   
   // System Fields
   createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  updatedAt             DateTime @updatedAt
   tags                  String[]         @default([])
   
   @@index([assignedToId])
