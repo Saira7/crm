@@ -1,0 +1,158 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique
+  description     String?
+  ipRestricted    Boolean          @default(true)  // Changed default to true
+  allowedIPs      String[]         @default(["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]) // Default company IPs
+  users           User[]
+  ipRestrictions  IPRestriction[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model Team {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  description String?
+  members   User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id             Int      @id @default(autoincrement())
+  name           String
+  email          String   @unique
+  password       String
+  roleId         Int
+  role           Role     @relation(fields: [roleId], references: [id])
+  teamId         Int?
+  team           Team?    @relation(fields: [teamId], references: [id])
+  allowedIPs     String[] @default([])
+  ipRestricted   Boolean  @default(true)  // Changed default to true
+  ipExempt       Boolean  @default(false) // New field: completely exempt from IP restrictions
+  lastLoginIP    String?
+  lastLoginAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  leads          Lead[]   @relation("AssignedLeads")
+  
+  @@index([email])
+  @@index([roleId])
+  @@index([teamId])
+}
+
+model IPRestriction {
+  id          Int      @id @default(autoincrement())
+  roleId      Int?
+  role        Role?    @relation(fields: [roleId], references: [id])
+  ipAddress   String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([roleId])
+  @@index([isActive])
+}
+
+model Lead {
+  id                    Int              @id @default(autoincrement())
+  // Sale Information
+  saleDate              DateTime?
+  agentName             String?
+  closerName            String?
+  pseudo                String?
+  
+  // Company Details (Required)
+  companyName           String
+  companyType           String?          // Ltd & Partnership / Sole Trader / Charity
+  registrationNumber    String?
+  tradingName           String?
+  numberOfDirectors     Int?
+  companyAddress        String
+  businessNature        String
+  landline              String?
+  mobile                String
+  email                 String
+  website               String?
+  
+  // Customer/Owner Details
+  directorOwnerName1    String?
+  position1             String?
+  dob1                  DateTime?
+  nationality1          String?
+  homeAddress1          String?
+  
+  directorOwnerName2    String?
+  position2             String?
+  dob2                  DateTime?
+  nationality2          String?
+  homeAddress2          String?
+  
+  tenure                String?          // Years living at address
+  previousAddress       String?
+  
+  // Payment Processing Details
+  offeredCompany        String?
+  offeredTerms          String?
+  existingCompany       String?
+  remainingTerms        String?
+  alreadyPayingCharges  String?
+  details               String?
+  totalTurnover         Float?
+  cardTurnover          Float?
+  avgTransaction        Float?
+  minTransaction        Float?
+  maxTransaction        Float?
+  monthlyLineRent       Float?
+  debitPercentage       Float?
+  creditPercentage      Float?
+  authorizationFee      Float?
+  otherCards            String?
+  
+  // Banking Details
+  accountTitle          String?
+  accountNumber         String?
+  sortCode              String?
+  iban                  String?
+  bankName              String?
+  
+  // Lead Management
+  status                String           @default("lead")  // lead, callback, sale
+  assignedToId          Int?
+  assignedTo            User?            @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  teamName              String?
+  
+  // Status Comments and Timestamps
+  leadComment           String?
+  leadCommentDate       DateTime?
+  callbackComment       String?
+  callbackCommentDate   DateTime?
+  saleComment           String?
+  saleCommentDate       DateTime?
+  
+  // Due Date Management
+  dueDate               DateTime?
+  dueDateUpdatedAt      DateTime?
+  
+  // System Fields
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  tags                  String[]         @default([])
+  
+  @@index([assignedToId])
+  @@index([teamName])
+  @@index([status])
+  @@index([dueDate])
+}
