@@ -1,5 +1,5 @@
 // src/api.js
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://174.138.31.36:4000/api';
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 export async function apiFetch(path, token, opts = {}) {
   // Ensure path begins with '/'
