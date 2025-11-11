@@ -61,7 +61,6 @@ export default function Dashboard() {
     return due <= todayISO && l.status !== LEAD_STATUS.WON && l.status !== LEAD_STATUS.LOST;
   });
 
-  const totalValue = accessibleLeads.reduce((sum, l) => sum + (l.value || 0), 0);
   const sales = accessibleLeads.filter(l => l.status === LEAD_STATUS.SALE).length;
 
   const getStatusColor = (status) => {
