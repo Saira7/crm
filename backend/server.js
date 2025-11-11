@@ -12,7 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 const { requireAuth } = require('./middleware/auth');
-app.use('/api/leads', requireAuth, checkIPRestriction, leadRoutes);
+app.use('/api/leads',  leadRoutes);
 app.use('/api/users', requireAuth, checkIPRestriction, userRoutes);
 app.use('/api/teams', requireAuth, checkIPRestriction, teamRoutes);
 app.use('/api/roles', roleRoutes);
