@@ -15,7 +15,6 @@ const { requireAuth } = require('./middleware/auth');
 app.use('/api/leads', requireAuth, checkIPRestriction, leadRoutes);
 app.use('/api/users', requireAuth, checkIPRestriction, userRoutes);
 app.use('/api/teams', requireAuth, checkIPRestriction, teamRoutes);
-app.use('/api/teams', teamRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/admin', adminRoutes); 
