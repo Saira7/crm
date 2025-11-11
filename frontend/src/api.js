@@ -16,8 +16,12 @@ export async function apiFetch(path, token, opts = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(url, { ...opts, headers });
-  
+    const fetchOpts = { ...opts, headers };
+  if (fetchOpts.body && typeof fetchOpts.body === 'object') {
+    fetchOpts.body = JSON.stringify(fetchOpts.body);
+  }
+
+  const res = await fetch(url, fetchOpts);
   let data;
   try {
     data = await res.json();

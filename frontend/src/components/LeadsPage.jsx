@@ -64,6 +64,7 @@ export default function LeadsPage() {
 
   const handleUpdate = async (id, patch) => {
     try {
+      await apiFetch(`/leads/${id}`, token, { method: 'PUT', body: JSON.stringify(patch) });
       await refresh();
       if (selected?.id === id) {
         setSelected(prev => ({ ...prev, ...patch }));
