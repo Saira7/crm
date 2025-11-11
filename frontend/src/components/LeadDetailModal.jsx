@@ -50,7 +50,7 @@ export default function LeadDetailModal({
       // Admin can see and assign to anyone
       return users;
     } 
-    else if (userRole === 'team_lead') {
+    else if (userRole === 'team_lead'||userRole === 'Team Lead') {
       // Team lead can assign to themselves or team members in same team
       return users.filter(u => {
         const uTeam = typeof u.team === 'string' ? u.team : u.team?.name;
@@ -66,7 +66,7 @@ export default function LeadDetailModal({
         // Allow assignment to:
         // 1. Themselves (current user)
         // 2. Team leads in the same team
-        return u.id === user.id || (uRole === 'team_lead' && uTeam === userTeam);
+        return u.id === user.id || (uRole === 'team_lead' && uTeam === userTeam)|| (uRole === 'Team Lead' && uTeam === userTeam);
       });
     }
   }, [users, userRole, userTeam, user?.id]);
@@ -376,7 +376,7 @@ export default function LeadDetailModal({
                   const newAssignedToId = parseInt(e.target.value, 10);
                   onChange('assignedToId', newAssignedToId);
                   // immediately call assign if user role allows direct assignment
-                  if (userRole === 'admin' || userRole === 'team_lead') {
+                  if (userRole === 'admin' || userRole === 'team_lead'||userRole === 'Team Lead') {
                     handleAssign(newAssignedToId);
                   }
                 }}

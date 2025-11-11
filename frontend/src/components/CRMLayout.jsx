@@ -200,7 +200,7 @@ export default function CRMLayout() {
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/leads', icon: Users, label: 'Leads' },
-    ...(userRole === 'admin' || userRole === 'team_lead'
+    ...(userRole === 'admin' || userRole === 'team_lead'||userRole === 'Team Lead'
       ? [{ path: '/team', icon: UsersRound, label: 'Team' }]
       : []),
   ];

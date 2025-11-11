@@ -49,7 +49,7 @@ export default function Dashboard() {
   const accessibleLeads = React.useMemo(() => {
     if (!user) return [];
     if (userRole === 'admin') return leads;
-    if (userRole === 'team_lead') return leads.filter(l => l.teamName === userTeam);
+    if (userRole === 'team_lead'||userRole === 'Team Lead') return leads.filter(l => l.teamName === userTeam);
     return leads.filter(l => l.assignedToId === user.id);
   }, [leads, user, userRole, userTeam]);
 

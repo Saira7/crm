@@ -54,7 +54,7 @@ export default function TeamPage() {
   const canEditUser = (member) => {
     if (!userRole) return false;
     if (userRole === 'admin') return true;
-    if (userRole === 'team_lead' && getUserTeam(member) === userTeam) return true;
+    if ((userRole === 'team_lead' && getUserTeam(member) === userTeam) || (userRole === 'Team Lead' && getUserTeam(member) === userTeam)) return true;
     return false;
   };
 

@@ -88,7 +88,7 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
   const availableAssignees = useMemo(() => {
     if (!Array.isArray(users)) return [];
     if (userRole === 'admin') return users;
-    if (userRole === 'team_lead') {
+    if (userRole === 'team_lead'||userRole === 'Team Lead') {
       const myTeam = typeof user?.team === 'string' ? user.team : user?.team?.name;
       return users.filter(u => {
         const uTeam = typeof u.team === 'string' ? u.team : u.team?.name;
