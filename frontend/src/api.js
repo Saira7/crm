@@ -17,7 +17,7 @@ export async function apiFetch(path, token, opts = {}) {
   }
 
   const res = await fetch(url, { ...opts, headers });
-
+  
   let data;
   try {
     data = await res.json();
