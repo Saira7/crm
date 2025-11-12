@@ -100,9 +100,7 @@ export default function TeamPage() {
     }
 
     try {
-      // Build body according to privileges:
-      // - team leads: only name, email, password
-      // - admins: name, email, password, roleId, teamId
+      
       const body = {
         name: editName,
         email: editEmail
@@ -119,18 +117,17 @@ export default function TeamPage() {
         if (foundTeam) body.teamId = foundTeam.id;
       }
 
-      // call backend
       const updated = await apiFetch(`/users/${editingUser.id}`, token, {
         method: 'PATCH',
         body
       });
 
-      // update UI list
+    
       setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
       setEditingUser(null);
     } catch (err) {
       console.error('saveEdit error', err);
-      // show server error message if provided
+  
       setError(err?.message || 'Failed to save user');
     }
   };

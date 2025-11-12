@@ -9,7 +9,8 @@ const DEFAULT_ALLOWED_IPS = [
   'localhost',
   '10.0.0.0/8',
   '172.16.0.0/12',
-  '192.168.0.0/16'
+  '192.168.0.0/16',
+
 ];
 
 /** Normalize and extract client IP (prefer XFF, then X-Real-IP, then socket) */
@@ -155,22 +156,30 @@ async function checkIPRestriction(req, res, next) {
     }
 
     // ===== STEP 3: USER-LEVEL WHITELIST (if user has specific restrictions) =====
-    if (user.ipRestricted) {
-      const userPatterns = Array.isArray(user.allowedIPs) ? user.allowedIPs : [];
-      console.log('[IP CHECK] Checking user-level patterns:', userPatterns);
-      
-      if (ipMatchesAny(clientIP, userPatterns)) {
-        console.log(`[IP CHECK] User-level IP match for ${clientIP}`);
-        return next();
-      } else {
-        console.warn(`IP DENY (user whitelist) ${clientIP} for user ${user.email}`);
-        return res.status(403).json({
-          error: 'Access denied from this IP address',
-          message: 'Your account is restricted to specific IP addresses. Contact administrator.',
-          clientIP
-        });
-      }
+    // ===== STEP 3: USER-LEVEL WHITELIST (if user has specific restrictions) =====
+if (user.ipRestricted) {
+  const userPatterns = Array.isArray(user.allowedIPs) ? user.allowedIPs : [];
+  console.log('[IP CHECK] Checking user-level patterns:', userPatterns);
+
+  if (userPatterns.length > 0) {
+    // Only enforce if user has explicit patterns defined
+    if (ipMatchesAny(clientIP, userPatterns)) {
+      console.log(`[IP CHECK] User-level IP match for ${clientIP}`);
+      return next();
+    } else {
+      console.warn(`IP DENY (user whitelist) ${clientIP} for user ${user.email}`);
+      return res.status(403).json({
+        error: 'Access denied from this IP address',
+        message: 'Your account is restricted to specific IP addresses. Contact administrator.',
+        clientIP
+      });
     }
+  } else {
+    // No user-level patterns — fall through to role-level checks
+    console.log('[IP CHECK] No user-level patterns, deferring to role-level');
+  }
+}
+
 
     // ===== STEP 4: ROLE-LEVEL WHITELIST =====
     if (user.role) {
