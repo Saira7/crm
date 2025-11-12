@@ -219,7 +219,7 @@ export default function TeamPage() {
                 className="w-full px-4 py-2 border rounded-lg"
               />
 
-              {/* show role/team only to admins */}
+              {/* show role/team only to admins
               { (userRole || '').toString().toLowerCase() === 'admin' && (
                 <>
                   <select
@@ -240,7 +240,7 @@ export default function TeamPage() {
                     {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
                   </select>
                 </>
-              )}
+              )} */}
 
               <div className="flex items-center gap-2">
                 <Key className="w-4 h-4 text-gray-400 flex-shrink-0" />
