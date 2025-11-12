@@ -25,19 +25,19 @@ router.put('/:id', requireAuth, async (req, res) => {
   const user = await prisma.user.update({ where: { id }, data: { name, email, roleId, teamId, ipAddress } });
   res.json(user);
 });
-// PATCH /api/users/:id
+// PATCH /api/users/:id 
 router.patch('/:id', requireAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) return res.status(400).json({ error: 'Invalid user id' });
 
-    // requester info (req.user may contain role as string or object)
+    // Get requester info
     const requesterId = req.user?.userId;
     const reqRoleRaw = req.user?.role;
     const requesterRole = typeof reqRoleRaw === 'string' ? reqRoleRaw : (reqRoleRaw?.name || reqRoleRaw?.role || '');
     const requesterRoleNorm = String(requesterRole || '').toLowerCase();
 
-    // load requester row to know teamId
+    // Get requester and target user data
     const requesterRow = await prisma.user.findUnique({
       where: { id: requesterId },
       select: { id: true, teamId: true, roleId: true }
@@ -45,66 +45,104 @@ router.patch('/:id', requireAuth, async (req, res) => {
 
     const targetUser = await prisma.user.findUnique({
       where: { id },
-      select: { id: true, teamId: true, roleId: true }
+      include: { role: true, team: true }
     });
+    
     if (!targetUser) return res.status(404).json({ error: 'User not found' });
 
     const isAdmin = requesterRoleNorm === 'admin';
     const isOwner = requesterId === id;
     const isTeamLead = requesterRoleNorm === 'team lead' || requesterRoleNorm === 'team_lead' || requesterRoleNorm === 'team-lead';
 
-    // DISALLOW owners (self) to update their account
+    // Check permissions
     if (isOwner) {
-      return res.status(403).json({ error: 'Users are not permitted to modify their own account via this endpoint' });
+      return res.status(403).json({ error: 'You cannot edit your own account' });
     }
 
-    // Authorize: admin OR (team_lead && same team)
     if (!(isAdmin || (isTeamLead && requesterRow?.teamId && requesterRow.teamId === targetUser.teamId))) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return res.status(403).json({ error: 'Insufficient permissions' });
     }
 
     const body = req.body || {};
     const data = {};
 
-    // Allowed for team_lead (and admin): name, email, password
-    if (body.name !== undefined) data.name = body.name || null;
-    if (body.email !== undefined) data.email = body.email || null;
+    // Validate and prepare update data
+    if (body.name !== undefined) {
+      if (!body.name || body.name.trim().length === 0) {
+        return res.status(400).json({ error: 'Name cannot be empty' });
+      }
+      data.name = body.name.trim();
+    }
 
-    if (body.password !== undefined) {
-      if (body.password && String(body.password).length > 0) {
-        const hashed = await bcrypt.hash(String(body.password), 10);
-        data.password = hashed;
-      } else {
-        // empty password => ignore; do not set to empty string
+    if (body.email !== undefined) {
+      if (!body.email || body.email.trim().length === 0) {
+        return res.status(400).json({ error: 'Email cannot be empty' });
+      }
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(body.email.trim())) {
+        return res.status(400).json({ error: 'Invalid email format' });
+      }
+      data.email = body.email.trim();
+    }
+
+    // Handle password
+    if (body.password !== undefined && body.password && body.password.trim().length > 0) {
+      if (body.password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      }
+      data.password = await bcrypt.hash(body.password, 10);
+    }
+
+    // Admin-only fields
+    if (isAdmin) {
+      if (body.roleId !== undefined) {
+        if (body.roleId === null || body.roleId === '') {
+          data.roleId = null;
+        } else {
+          const roleExists = await prisma.role.findUnique({ where: { id: body.roleId } });
+          if (!roleExists) return res.status(400).json({ error: 'Invalid role ID' });
+          data.roleId = body.roleId;
+        }
+      }
+
+      if (body.teamId !== undefined) {
+        if (body.teamId === null || body.teamId === '') {
+          data.teamId = null;
+        } else {
+          const teamExists = await prisma.team.findUnique({ where: { id: body.teamId } });
+          if (!teamExists) return res.status(400).json({ error: 'Invalid team ID' });
+          data.teamId = body.teamId;
+        }
       }
     }
 
-    // ONLY admin can change role/team/ip related fields
-    if (body.roleId !== undefined || body.teamId !== undefined || body.allowedIPs !== undefined || body.ipExempt !== undefined || body.ipRestricted !== undefined) {
-      if (!isAdmin) return res.status(403).json({ error: 'Only admin can change role/team/IP settings' });
-
-      if (body.roleId !== undefined) data.roleId = body.roleId || null;
-      if (body.teamId !== undefined) data.teamId = body.teamId || null;
-      if (body.allowedIPs !== undefined) data.allowedIPs = Array.isArray(body.allowedIPs) ? body.allowedIPs : [];
-      if (body.ipExempt !== undefined) data.ipExempt = !!body.ipExempt;
-      if (body.ipRestricted !== undefined) data.ipRestricted = !!body.ipRestricted;
-    }
-
     if (Object.keys(data).length === 0) {
-      return res.status(400).json({ error: 'No valid fields provided to update' });
+      return res.status(400).json({ error: 'No valid fields to update' });
     }
 
+    // Perform update
     const updated = await prisma.user.update({
       where: { id },
       data,
       include: { role: true, team: true }
     });
 
-    res.json(updated);
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = updated;
+    res.json(userWithoutPassword);
+
   } catch (err) {
-    console.error('users.patch error', err);
-    if (err.code === 'P2002') return res.status(400).json({ error: 'Duplicate value' });
-    res.status(500).json({ error: 'Failed to update user' });
+    console.error('PATCH /api/users/:id error:', err);
+    
+    if (err.code === 'P2002') {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+    if (err.code === 'P2025') {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
