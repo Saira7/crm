@@ -104,7 +104,7 @@ router.post('/', requireAuth, async (req, res) => {
     }
 
     // Validate required fields (per your schema)
-    const required = ['companyName', 'companyAddress', 'businessNature', 'mobile', 'email'];
+    const required = ['companyName', 'companyAddress', 'businessNature', 'mobile'];
     for (const f of required) {
       if (!req.body[f]) {
         return res.status(400).json({ error: `Missing required field: ${f}` });
