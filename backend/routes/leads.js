@@ -179,7 +179,7 @@ router.post('/', requireAuth, async (req, res) => {
       businessNature: req.body.businessNature,
       landline: req.body.landline || null,
       mobile: req.body.mobile,
-      email: req.body.email,
+      email: req.body.email||null,
       website: req.body.website || null,
 
       // Owners

@@ -21,6 +21,7 @@ export default function TeamPage() {
 
   const userRole = typeof user?.role === 'string' ? user?.role : user?.role?.name;
   const userTeam = typeof user?.team === 'string' ? user?.team : user?.team?.name;
+  const userId = user?.id;
 
   useEffect(() => {
     if (!token) return;
@@ -42,7 +43,7 @@ export default function TeamPage() {
 
   const filteredUsers = useMemo(() => {
     return users.filter(u =>
-      userRole === 'admin' ||
+      (userRole && userRole.toString().toLowerCase() === 'admin') ||
       (typeof u.team === 'string' ? u.team : u.team?.name) === userTeam
     );
   }, [users, userRole, userTeam]);
@@ -51,17 +52,28 @@ export default function TeamPage() {
   const getUserRole = (u) => typeof u.role === 'string' ? u.role : u.role?.name;
   const getUserTeam = (u) => typeof u.team === 'string' ? u.team : u.team?.name;
 
+  // canEditUser: admin or team_lead editing same-team member.
+  // additionally disallow owner editing their own account (per requirement).
   const canEditUser = (member) => {
     if (!userRole) return false;
-    if (userRole === 'admin') return true;
-    if ((userRole === 'team_lead' && getUserTeam(member) === userTeam) || (userRole === 'Team Lead' && getUserTeam(member) === userTeam)) return true;
+    // owners cannot edit themselves
+    if (member?.id === userId) return false;
+
+    const roleNormalized = (userRole || '').toString().toLowerCase();
+    if (roleNormalized === 'admin') return true;
+
+    // team lead - allow only for users in same team
+    if (roleNormalized === 'team_lead' || roleNormalized === 'team lead' || roleNormalized === 'team-lead') {
+      return getUserTeam(member) === userTeam;
+    }
+
     return false;
   };
 
   const handleEdit = (member) => {
     setEditingUser(member);
-    setEditName(member.name);
-    setEditEmail(member.email);
+    setEditName(member.name || '');
+    setEditEmail(member.email || '');
     setEditRole(getUserRole(member) || '');
     setEditTeam(getUserTeam(member) || '');
     setEditPassword('');
@@ -71,35 +83,55 @@ export default function TeamPage() {
   const saveEdit = async () => {
     if (!editingUser) return;
 
-    // Validate
+    // Basic validation
     if (!editName.trim()) return setError('Name is required');
     if (!editEmail.trim()) return setError('Email is required');
-    if (!editRole || !roles.some(r => r.name === editRole)) return setError('Invalid role');
-    if (!editTeam || !teams.some(t => t.name === editTeam)) return setError('Invalid team');
+
+    // For non-admins we don't require role/team to be set; for admin we validate role/team choices
+    const isAdmin = (userRole || '').toString().toLowerCase() === 'admin';
+
+    if (isAdmin) {
+      if (!editRole || !roles.some(r => r.name === editRole)) return setError('Invalid role (admin only)');
+      if (!editTeam || !teams.some(t => t.name === editTeam)) return setError('Invalid team (admin only)');
+    }
+
+    if (editPassword && editPassword.trim().length > 0 && editPassword.length < 6) {
+      return setError('Password must be at least 6 characters');
+    }
 
     try {
+      // Build body according to privileges:
+      // - team leads: only name, email, password
+      // - admins: name, email, password, roleId, teamId
       const body = {
         name: editName,
-        email: editEmail,
-        roleId: roles.find(r => r.name === editRole)?.id,
-        teamId: teams.find(t => t.name === editTeam)?.id
+        email: editEmail
       };
 
-      if (editPassword.trim()) {
-        if (editPassword.length < 6) return setError('Password must be at least 6 characters');
+      if (editPassword && editPassword.trim().length > 0) {
         body.password = editPassword;
       }
 
+      if (isAdmin) {
+        const foundRole = roles.find(r => r.name === editRole);
+        const foundTeam = teams.find(t => t.name === editTeam);
+        if (foundRole) body.roleId = foundRole.id;
+        if (foundTeam) body.teamId = foundTeam.id;
+      }
+
+      // call backend
       const updated = await apiFetch(`/users/${editingUser.id}`, token, {
         method: 'PATCH',
         body
       });
 
-      setUsers(users.map(u => u.id === updated.id ? updated : u));
+      // update UI list
+      setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
       setEditingUser(null);
     } catch (err) {
-      console.error(err);
-      setError('Failed to save user');
+      console.error('saveEdit error', err);
+      // show server error message if provided
+      setError(err?.message || 'Failed to save user');
     }
   };
 
@@ -186,22 +218,30 @@ export default function TeamPage() {
                 placeholder="Email"
                 className="w-full px-4 py-2 border rounded-lg"
               />
-              <select
-                value={editRole}
-                onChange={(e) => setEditRole(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg"
-              >
-                <option value="">Select role</option>
-                {roles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
-              </select>
-              <select
-                value={editTeam}
-                onChange={(e) => setEditTeam(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg"
-              >
-                <option value="">Select team</option>
-                {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-              </select>
+
+              {/* show role/team only to admins */}
+              { (userRole || '').toString().toLowerCase() === 'admin' && (
+                <>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg"
+                  >
+                    <option value="">Select role</option>
+                    {roles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                  </select>
+
+                  <select
+                    value={editTeam}
+                    onChange={(e) => setEditTeam(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg"
+                  >
+                    <option value="">Select team</option>
+                    {teams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                  </select>
+                </>
+              )}
+
               <div className="flex items-center gap-2">
                 <Key className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 <input

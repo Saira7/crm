@@ -27,7 +27,7 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
     businessNature: '',
     landline: '',
     mobile: '',
-    email: '',           // now optional
+    email: '',           
     website: '',
     directorOwnerName1: '',
     position1: '',
@@ -63,9 +63,9 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
     iban: '',
     bankName: '',
     status: 'lead',
-    dueDate: '', // will be set from datepicker as ISO
+    dueDate: '', 
     tags: '',
-    assignedToId: '' // allow selecting assignee
+    assignedToId: '' 
   });
 
   const handleChange = (e) => {
@@ -87,7 +87,7 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
   }, [users, userRole, user]);
 
   const validateMinimum = () => {
-    // email optional now
+    
     if (!formData.companyName || !formData.companyAddress || !formData.businessNature || !formData.mobile) {
       return 'Please fill in required fields: Company Name, Company Address, Business Nature and Mobile';
     }
@@ -234,8 +234,6 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
             </div>
           </div>
 
-          {/* Company & other sections ... (you already have all markup) */}
-          {/* For brevity, I keep your existing markup unchanged below — it will read from the same formData/handleChange */}
           {/* Company Details */}
           <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
             <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
@@ -259,8 +257,6 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
                 </select>
               </div>
 
-              {/* ... keep rest of your fields exactly as you already have (they use name/value/handleChange) */}
-              {/* Mobile, email (email is optional now), website, address etc. */}
               <div className="lg:col-span-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Company Address <span className="text-red-500">*</span></label>
                 <textarea name="companyAddress" value={formData.companyAddress} onChange={handleChange} required rows="2" className="w-full px-3 py-2 border rounded-lg" />
@@ -288,9 +284,6 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
             </div>
           </div>
 
-          {/* Director/Owner 1 & 2, Payment, Banking, Lead Management... */}
-          {/* Keep your existing sections — they read from formData and call handleChange */}
-          {/* Due date picker + assignee UI: */}
           <div className="bg-indigo-50 rounded-xl p-6 border border-indigo-200">
             <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-indigo-600" /> Lead Management

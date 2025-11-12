@@ -108,7 +108,7 @@ export default function LeadsPage() {
             {filtered.map(l => (
               <tr key={l.id} className="border-t">
                 <td className="p-3">{l.companyName}</td>
-                <td className="p-3">{l.email || l.mobile}</td>
+                <td className="p-3">{l.mobile}</td>
                 <td className="p-3">{l.status}</td>
                 <td className="p-3">{l.assignedToName || 'Unassigned'}</td>
                 <td className="p-3">{l.dueDate ? new Date(l.dueDate).toLocaleString() : '—'}</td>
