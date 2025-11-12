@@ -10,6 +10,10 @@ const DEFAULT_ALLOWED_IPS = [
   '10.0.0.0/8',
   '172.16.0.0/12',
   '192.168.0.0/16',
+   '206.84.189.0/24',
+   '110.39.173.0/24',
+   '79.139.84.0/24',
+
 
 ];
 
@@ -155,7 +159,6 @@ async function checkIPRestriction(req, res, next) {
       return next();
     }
 
-    // ===== STEP 3: USER-LEVEL WHITELIST (if user has specific restrictions) =====
     // ===== STEP 3: USER-LEVEL WHITELIST (if user has specific restrictions) =====
 if (user.ipRestricted) {
   const userPatterns = Array.isArray(user.allowedIPs) ? user.allowedIPs : [];
