@@ -1,119 +1,268 @@
+// backend/routes/users.js
 const express = require('express');
 const bcrypt = require('bcrypt');
 const { PrismaClient } = require('@prisma/client');
 const { requireAuth } = require('../middleware/auth');
+
 const prisma = new PrismaClient();
 const router = express.Router();
 
+/**
+ * Helper to normalize a role string, e.g. "Team Lead" -> "team_lead".
+ */
+function normalizeRole(role) {
+  if (!role) return '';
+  const r = String(typeof role === 'string' ? role : role.name || '').toLowerCase().trim();
+  return r.replace(/\s+/g, '_');
+}
+
+/**
+ * GET /api/users
+ * Returns all users with role & team included.
+ * Access: any authenticated user (frontend filters per-role).
+ */
 router.get('/', requireAuth, async (req, res) => {
-  const users = await prisma.user.findMany({ include: { role: true, team: true } });
-  res.json(users);
-});
-
-router.post('/', requireAuth, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-  const { name, email, password, roleId, teamId, ipAddress } = req.body;
-  const hashed = await bcrypt.hash(password, 10);
-  const user = await prisma.user.create({ data: { name, email, password: hashed, roleId, teamId, ipAddress } });
-  res.json(user);
-});
-
-router.put('/:id', requireAuth, async (req, res) => {
-  const id = parseInt(req.params.id);
-  if (req.user.role !== 'admin' && req.user.userId !== id) return res.status(403).json({ error: 'Forbidden' });
-  const { name, email, roleId, teamId, ipAddress } = req.body;
-  const user = await prisma.user.update({ where: { id }, data: { name, email, roleId, teamId, ipAddress } });
-  res.json(user);
-});
-// PATCH /api/users/:id 
-router.patch('/:id', requireAuth, async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (isNaN(id)) return res.status(400).json({ error: 'Invalid user id' });
+    const users = await prisma.user.findMany({
+      include: { role: true, team: true },
+      orderBy: { id: 'asc' },
+    });
 
-    // Get requester info
+    // strip password
+    const safeUsers = users.map(({ password, ...u }) => u);
+    res.json(safeUsers);
+  } catch (err) {
+    console.error('GET /api/users error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/users
+ * Create a new user.
+ * Access:
+ *   - admin: can create any user, any team
+ *   - team_lead: can create non-admin users ONLY in their own team
+ */
+router.post('/', requireAuth, async (req, res) => {
+  try {
     const requesterId = req.user?.userId;
-    const reqRoleRaw = req.user?.role;
-    const requesterRole = typeof reqRoleRaw === 'string' ? reqRoleRaw : (reqRoleRaw?.name || reqRoleRaw?.role || '');
-    const requesterRoleNorm = String(requesterRole || '').toLowerCase();
-
-    // Get requester and target user data
-    const requesterRow = await prisma.user.findUnique({
-      where: { id: requesterId },
-      select: { id: true, teamId: true, roleId: true }
-    });
-
-    const targetUser = await prisma.user.findUnique({
-      where: { id },
-      include: { role: true, team: true }
-    });
-    
-    if (!targetUser) return res.status(404).json({ error: 'User not found' });
+    const requesterRoleNorm = normalizeRole(req.user?.role);
 
     const isAdmin = requesterRoleNorm === 'admin';
-    const isOwner = requesterId === id;
-    const isTeamLead = requesterRoleNorm === 'team lead' || requesterRoleNorm === 'team_lead' || requesterRoleNorm === 'team-lead';
+    const isTeamLead =
+      requesterRoleNorm === 'team_lead' ||
+      requesterRoleNorm === 'team-lead';
 
-    // Check permissions
-    if (isOwner) {
+    if (!isAdmin && !isTeamLead) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { name, email, password, roleId, teamId } = req.body || {};
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    if (!password || String(password).length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+    if (!roleId) {
+      return res.status(400).json({ error: 'roleId is required' });
+    }
+
+    const role = await prisma.role.findUnique({ where: { id: roleId } });
+    if (!role) {
+      return res.status(400).json({ error: 'Invalid roleId' });
+    }
+    const newUserRoleNorm = normalizeRole(role.name);
+
+    // team lead cannot create admins
+    if (isTeamLead && newUserRoleNorm === 'admin') {
+      return res.status(403).json({ error: 'Team Leads cannot create admin users' });
+    }
+
+    // determine team for new user
+    let finalTeamId = null;
+
+    if (isAdmin) {
+      // admin may specify a teamId or leave null
+      if (teamId != null) {
+        const team = await prisma.team.findUnique({ where: { id: teamId } });
+        if (!team) {
+          return res.status(400).json({ error: 'Invalid teamId' });
+        }
+        finalTeamId = team.id;
+      }
+    } else if (isTeamLead) {
+      // force new user into the same team as the team lead
+      const requester = await prisma.user.findUnique({ where: { id: requesterId } });
+      if (!requester || !requester.teamId) {
+        return res.status(400).json({ error: 'Your team is not configured; contact an admin' });
+      }
+      finalTeamId = requester.teamId;
+    }
+
+    const hashed = await bcrypt.hash(String(password), 10);
+
+    const created = await prisma.user.create({
+      data: {
+        name: name.trim(),
+        email: email.trim(),
+        password: hashed,
+        roleId: role.id,
+        teamId: finalTeamId,
+      },
+      include: { role: true, team: true },
+    });
+
+    const { password: _pw, ...safeUser } = created;
+    res.status(201).json(safeUser);
+  } catch (err) {
+    console.error('POST /api/users error', err);
+    if (err.code === 'P2002') {
+      return res.status(400).json({ error: 'A user with this email already exists' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * PATCH /api/users/:id
+ * Update a user.
+ * Access:
+ *   - admin: can edit anyone
+ *   - team_lead: can edit users in their own team (but not themselves)
+ *   - no one can edit themselves via this endpoint
+ */
+router.patch('/:id', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
+
+    const requesterId = req.user?.userId;
+    const requesterRoleNorm = normalizeRole(req.user?.role);
+
+    const isAdmin = requesterRoleNorm === 'admin';
+    const isTeamLead =
+      requesterRoleNorm === 'team_lead' ||
+      requesterRoleNorm === 'team-lead';
+
+    if (!isAdmin && !isTeamLead) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    // no self-edit
+    if (requesterId === id) {
       return res.status(403).json({ error: 'You cannot edit your own account' });
     }
 
-    if (!(isAdmin || (isTeamLead && requesterRow?.teamId && requesterRow.teamId === targetUser.teamId))) {
-      return res.status(403).json({ error: 'Insufficient permissions' });
+    const requester = await prisma.user.findUnique({ where: { id: requesterId } });
+    const target = await prisma.user.findUnique({
+      where: { id },
+      include: { role: true, team: true },
+    });
+
+    if (!target) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const targetRoleNorm = normalizeRole(target.role?.name);
+
+    // team_lead can only edit users in same team and cannot edit admins
+    if (isTeamLead) {
+      if (!requester?.teamId || requester.teamId !== target.teamId) {
+        return res.status(403).json({ error: 'Insufficient permissions (different team)' });
+      }
+      if (targetRoleNorm === 'admin') {
+        return res.status(403).json({ error: 'Team Leads cannot modify admin users' });
+      }
     }
 
     const body = req.body || {};
     const data = {};
 
-    // Validate and prepare update data
+    // Basic fields
     if (body.name !== undefined) {
-      if (!body.name || body.name.trim().length === 0) {
+      if (!body.name || !body.name.trim()) {
         return res.status(400).json({ error: 'Name cannot be empty' });
       }
       data.name = body.name.trim();
     }
 
     if (body.email !== undefined) {
-      if (!body.email || body.email.trim().length === 0) {
+      if (!body.email || !body.email.trim()) {
         return res.status(400).json({ error: 'Email cannot be empty' });
-      }
-      // Basic email validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(body.email.trim())) {
-        return res.status(400).json({ error: 'Invalid email format' });
       }
       data.email = body.email.trim();
     }
 
-    // Handle password
-    if (body.password !== undefined && body.password && body.password.trim().length > 0) {
-      if (body.password.length < 6) {
-        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    // Password
+    if (body.password !== undefined) {
+      if (body.password && String(body.password).trim().length > 0) {
+        if (String(body.password).length < 6) {
+          return res.status(400).json({ error: 'Password must be at least 6 characters' });
+        }
+        data.password = await bcrypt.hash(String(body.password), 10);
       }
-      data.password = await bcrypt.hash(body.password, 10);
     }
 
-    // Admin-only fields
-    if (isAdmin) {
+    // Role / team changes
+    if (isAdmin || isTeamLead) {
       if (body.roleId !== undefined) {
         if (body.roleId === null || body.roleId === '') {
           data.roleId = null;
         } else {
-          const roleExists = await prisma.role.findUnique({ where: { id: body.roleId } });
-          if (!roleExists) return res.status(400).json({ error: 'Invalid role ID' });
-          data.roleId = body.roleId;
+          const newRole = await prisma.role.findUnique({ where: { id: body.roleId } });
+          if (!newRole) {
+            return res.status(400).json({ error: 'Invalid roleId' });
+          }
+          const newRoleNorm = normalizeRole(newRole.name);
+          if (isTeamLead && newRoleNorm === 'admin') {
+            return res.status(403).json({ error: 'Team Leads cannot assign the admin role' });
+          }
+          data.roleId = newRole.id;
         }
       }
 
       if (body.teamId !== undefined) {
-        if (body.teamId === null || body.teamId === '') {
-          data.teamId = null;
-        } else {
-          const teamExists = await prisma.team.findUnique({ where: { id: body.teamId } });
-          if (!teamExists) return res.status(400).json({ error: 'Invalid team ID' });
-          data.teamId = body.teamId;
+        if (isAdmin) {
+          if (body.teamId === null || body.teamId === '') {
+            data.teamId = null;
+          } else {
+            const newTeam = await prisma.team.findUnique({ where: { id: body.teamId } });
+            if (!newTeam) {
+              return res.status(400).json({ error: 'Invalid teamId' });
+            }
+            data.teamId = newTeam.id;
+          }
+        } else if (isTeamLead) {
+          // force same team as the requester
+          if (!requester?.teamId) {
+            return res.status(400).json({ error: 'Your team is not configured; contact an admin' });
+          }
+          data.teamId = requester.teamId;
         }
+      }
+    }
+
+    // IP restriction / description fields — admin only
+    if (isAdmin) {
+      if (body.ipRestricted !== undefined) {
+        data.ipRestricted = !!body.ipRestricted;
+      }
+      if (body.ipExempt !== undefined) {
+        data.ipExempt = !!body.ipExempt;
+      }
+      if (Array.isArray(body.allowedIPs)) {
+        data.allowedIPs = body.allowedIPs.map(String);
+      }
+      if (body.description !== undefined) {
+        data.description = body.description || null;
       }
     }
 
@@ -121,36 +270,78 @@ router.patch('/:id', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
 
-    // Perform update
     const updated = await prisma.user.update({
       where: { id },
       data,
-      include: { role: true, team: true }
+      include: { role: true, team: true },
     });
 
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = updated;
-    res.json(userWithoutPassword);
-
+    const { password: _pw, ...safeUser } = updated;
+    res.json(safeUser);
   } catch (err) {
-    console.error('PATCH /api/users/:id error:', err);
-    
-    if (err.code === 'P2002') {
-      return res.status(400).json({ error: 'Email already exists' });
-    }
-    if (err.code === 'P2025') {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
+    console.error('PATCH /api/users/:id error', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
+/**
+ * DELETE /api/users/:id
+ * Delete a user.
+ * Access:
+ *   - admin: can delete anyone
+ *   - team_lead: can delete users in their own team (but not themselves and not admins)
+ */
 router.delete('/:id', requireAuth, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
-  const id = parseInt(req.params.id);
-  await prisma.user.delete({ where: { id } });
-  res.json({ success: true });
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
+
+    const requesterId = req.user?.userId;
+    const requesterRoleNorm = normalizeRole(req.user?.role);
+
+    const isAdmin = requesterRoleNorm === 'admin';
+    const isTeamLead =
+      requesterRoleNorm === 'team_lead' ||
+      requesterRoleNorm === 'team-lead';
+
+    if (!isAdmin && !isTeamLead) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    // cannot delete self
+    if (requesterId === id) {
+      return res.status(403).json({ error: 'You cannot delete your own account' });
+    }
+
+    const requester = await prisma.user.findUnique({ where: { id: requesterId } });
+    const target = await prisma.user.findUnique({
+      where: { id },
+      include: { role: true, team: true },
+    });
+
+    if (!target) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const targetRoleNorm = normalizeRole(target.role?.name);
+
+    if (isTeamLead) {
+      if (!requester?.teamId || requester.teamId !== target.teamId) {
+        return res.status(403).json({ error: 'Insufficient permissions (different team)' });
+      }
+      if (targetRoleNorm === 'admin') {
+        return res.status(403).json({ error: 'Team Leads cannot delete admin users' });
+      }
+    }
+
+    await prisma.user.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('DELETE /api/users/:id error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 module.exports = router;
