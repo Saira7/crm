@@ -11,6 +11,8 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const [activeTab, setActiveTab] = useState('lead'); // 'lead' | 'callback' | 'sale' | 'transfer'
   const [showAdd, setShowAdd] = useState(false);
   const [selected, setSelected] = useState(null);
   const [q, setQ] = useState('');
@@ -21,8 +23,14 @@ export default function LeadsPage() {
   const userTeam = user?.team
     ? (typeof user.team === 'string' ? user.team : user.team.name)
     : null;
-
   const normRole = (userRole || '').toString().toLowerCase();
+
+  const TABS = [
+    { key: 'lead', label: 'Leads' },
+    { key: 'callback', label: 'Call Backs' },
+    { key: 'sale', label: 'Sales' },
+    { key: 'transfer', label: 'Transfers' },
+  ];
 
   const load = async () => {
     if (!token) return;
@@ -50,7 +58,7 @@ export default function LeadsPage() {
     await load();
   };
 
-  // Which leads are visible to this user
+  // Which leads this user can see
   const accessible = useMemo(() => {
     if (!user) return [];
     if (normRole === 'admin') return leads;
@@ -58,13 +66,19 @@ export default function LeadsPage() {
       return leads.filter((l) => l.teamName === userTeam);
     }
     return leads.filter((l) => l.assignedToId === user.id);
-  }, [leads, user, normRole, userTeam]);
+  }, [leads, normRole, user, userTeam]);
 
-  // Global search on visible leads
+  // Filter by tab (status)
+  const byStatus = useMemo(
+    () => accessible.filter((l) => l.status === activeTab),
+    [accessible, activeTab]
+  );
+
+  // Global search across visible-in-tab leads
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return accessible;
-    return accessible.filter((l) =>
+    if (!s) return byStatus;
+    return byStatus.filter((l) =>
       [
         l.companyName,
         l.mobile,
@@ -76,27 +90,31 @@ export default function LeadsPage() {
         .filter(Boolean)
         .some((field) => field.toLowerCase().includes(s))
     );
-  }, [accessible, q]);
+  }, [byStatus, q]);
 
-  // Who can manage (delete / broad assignment)
+  // who can delete / manage leads
   const canManageLeads = ['admin', 'manager', 'team_lead', 'team lead', 'team-lead'].includes(
     normRole
   );
 
-  // Options for "Assigned to" dropdown
+  // assignment options for dropdown
   const assignableUsers = useMemo(() => {
     if (!Array.isArray(users) || !user) return [];
+
     if (normRole === 'admin' || normRole === 'manager') {
+      // can assign to any user
       return users;
     }
+
     if (normRole === 'team_lead' || normRole === 'team lead' || normRole === 'team-lead') {
-      // team leads can assign within their team
+      // team leads can assign to users in their own team
       return users.filter((u) => {
         const t = u?.team ? (typeof u.team === 'string' ? u.team : u.team.name) : null;
         return t && t === userTeam;
       });
     }
-    // regular agent: can assign to themselves + their team lead(s)
+
+    // regular agent: can assign to themselves + team lead(s) in same team
     return users.filter((u) => {
       const t = u?.team ? (typeof u.team === 'string' ? u.team : u.team.name) : null;
       const r = u?.role ? (typeof u.role === 'string' ? u.role : u.role.name) : null;
@@ -132,6 +150,7 @@ export default function LeadsPage() {
     if (!canManageLeads) return;
     const ok = window.confirm('Are you sure you want to delete this record?');
     if (!ok) return;
+
     try {
       await apiFetch(`/leads/${id}`, token, {
         method: 'DELETE',
@@ -168,14 +187,16 @@ export default function LeadsPage() {
     );
   }
 
+  const currentTab = TABS.find((t) => t.key === activeTab);
+
   return (
     <div className="p-4 lg:p-8 space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 mb-2">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              Leads / Call Backs / Sales / Transfers
+              {currentTab?.label || 'Leads'}
             </h1>
             <p className="text-sm text-gray-500">{filtered.length} records</p>
           </div>
@@ -194,9 +215,28 @@ export default function LeadsPage() {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm"
             >
               <Plus className="w-4 h-4" />
-              Add Lead
+              Add {currentTab?.label?.slice(0, -1) || 'Lead'}
             </button>
           </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-2">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={
+                'px-3 py-1.5 text-xs font-medium rounded-full border ' +
+                (activeTab === tab.key
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50')
+              }
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -239,30 +279,31 @@ export default function LeadsPage() {
                   )}
                 </td>
                 <td className="p-3 align-top">
-                  <div className="flex flex-col gap-2 min-w-[220px]">
-                    {/* Assignment dropdown */}
-                    <div className="flex items-center gap-2">
-                      <select
-                        className="flex-1 px-2 py-1 border rounded-lg text-xs"
-                        value={l.assignedToId || ''}
-                        onChange={(e) => handleAssignChange(l.id, e.target.value)}
-                      >
-                        <option value="">Unassigned</option>
-                        {assignableUsers.map((u) => (
+                  <div className="flex flex-col gap-2 min-w-[230px]">
+                    {/* Assigned To dropdown */}
+                    <select
+                      className="flex-1 px-2 py-1 border rounded-lg text-xs"
+                      value={l.assignedToId || ''}
+                      onChange={(e) => handleAssignChange(l.id, e.target.value)}
+                    >
+                      <option value="">Unassigned</option>
+                      {assignableUsers.map((u) => {
+                        const roleLabel =
+                          typeof u.role === 'string'
+                            ? u.role
+                            : u.role?.name || 'user';
+                        return (
                           <option key={u.id} value={u.id}>
-                            {u.name}{' '}
-                            {(
-                              typeof u.role === 'string'
-                                ? u.role
-                                : u.role?.name
-                            ) || 'user'}
+                            {u.name} ({roleLabel})
                           </option>
-                        ))}
-                      </select>
-                    </div>
+                        );
+                      })}
+                    </select>
+
                     {/* View / Delete buttons */}
                     <div className="flex flex-wrap gap-2">
                       <button
+                        type="button"
                         onClick={() => setSelected(l)}
                         className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs"
                       >
@@ -271,6 +312,7 @@ export default function LeadsPage() {
                       </button>
                       {canManageLeads && (
                         <button
+                          type="button"
                           onClick={() => handleDelete(l.id)}
                           className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 text-xs"
                         >
@@ -294,13 +336,14 @@ export default function LeadsPage() {
         </table>
       </div>
 
-      {/* Add Lead Modal */}
+      {/* Add Modal */}
       {showAdd && (
         <AddLeadModal
           token={token}
           user={user}
           users={users}
           userRole={userRole}
+          initialStatus={activeTab}
           onClose={() => setShowAdd(false)}
           onSuccess={refresh}
         />
@@ -313,6 +356,8 @@ export default function LeadsPage() {
           token={token}
           user={user}
           users={users}
+          userRole={userRole}
+          userTeam={userTeam}
           onClose={() => setSelected(null)}
           onUpdate={handleUpdate}
           onRefresh={refresh}
