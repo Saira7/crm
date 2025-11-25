@@ -1,11 +1,19 @@
-// frontend/src/components/AddLeadModal.jsx
+// src/components/AddLeadModal.jsx
 import React, { useState, useMemo } from 'react';
-import { X, Building, User, CreditCard, Landmark, Calendar, FileText } from 'lucide-react';
+import { X, Building, Calendar, FileText } from 'lucide-react';
 import ReactDatePicker from 'react-datepicker';
-import "react-datepicker/dist/react-datepicker.css";
+import 'react-datepicker/dist/react-datepicker.css';
 import { apiFetch } from '../api';
 
-export default function AddLeadModal({ onClose, onSuccess, token, user = {}, users = [], userRole = 'sales_rep' }) {
+export default function AddLeadModal({
+  onClose,
+  onSuccess,
+  token,
+  user = {},
+  users = [],
+  userRole = 'sales_rep',
+  initialStatus = 'lead',
+}) {
   const [loading, setLoading] = useState(false);
   const [dueDatePicker, setDueDatePicker] = useState(() => {
     const d = new Date();
@@ -27,7 +35,7 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
     businessNature: '',
     landline: '',
     mobile: '',
-    email: '',           
+    email: '',
     website: '',
     directorOwnerName1: '',
     position1: '',
@@ -62,10 +70,11 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
     sortCode: '',
     iban: '',
     bankName: '',
-    status: 'lead',
-    dueDate: '', 
+    status: initialStatus || 'lead',
+    dueDate: '',
     tags: '',
-    assignedToId: '' 
+    assignedToId: '',
+    leadComment: '',
   });
 
   const handleChange = (e) => {
@@ -75,21 +84,37 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
 
   const availableAssignees = useMemo(() => {
     if (!Array.isArray(users)) return [];
-    if (userRole === 'admin') return users;
-    if (userRole === 'team_lead' || userRole === 'Team Lead') {
-      const myTeam = typeof user?.team === 'string' ? user.team : user?.team?.name;
+
+    const normalizedRole =
+      typeof userRole === 'string' ? userRole : String(userRole || '');
+
+    const myTeam =
+      typeof user?.team === 'string' ? user.team : user?.team?.name;
+
+    if (normalizedRole === 'admin') return users;
+
+    if (normalizedRole === 'team_lead' || normalizedRole === 'Team Lead') {
       return users.filter(u => {
-        const uTeam = typeof u.team === 'string' ? u.team : u.team?.name;
+        const uTeam =
+          typeof u.team === 'string' ? u.team : u.team?.name;
         return uTeam === myTeam;
       });
     }
+
+    // Sales rep can assign to themselves or team leads in same team, if you want:
+    // const teamLeadsSameTeam = users.filter(u => {
+    //   const uTeam = typeof u.team === 'string' ? u.team : u.team?.name;
+    //   const uRole = typeof u.role === 'string' ? u.role : u.role?.name;
+    //   return uTeam === myTeam && (uRole === 'team_lead' || uRole === 'Team Lead');
+    // });
+    // return teamLeadsSameTeam;
+
     return [];
   }, [users, userRole, user]);
 
   const validateMinimum = () => {
-    
     if (!formData.companyName || !formData.companyAddress || !formData.businessNature || !formData.mobile) {
-      return 'Please fill in required fields: Company Name, Company Address, Business Nature and Mobile';
+      return 'Please fill in required fields: Customer Name, Company Address, Business Nature and Mobile';
     }
     return null;
   };
@@ -112,7 +137,7 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
         closerName: formData.closerName || null,
         pseudo: formData.pseudo || null,
 
-        // company
+        // company (customer)
         companyName: formData.companyName,
         companyType: formData.companyType || null,
         registrationNumber: formData.registrationNumber || null,
@@ -122,7 +147,6 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
         businessNature: formData.businessNature,
         landline: formData.landline || null,
         mobile: formData.mobile,
-        // email optional: send null if empty
         email: formData.email && formData.email.trim() !== '' ? formData.email.trim() : null,
         website: formData.website || null,
 
@@ -169,25 +193,31 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
 
         // lead management
         status: formData.status || 'lead',
-        assignedToId: formData.assignedToId ? parseInt(formData.assignedToId, 10) : (user?.id || null),
-        teamName: user?.team ? (typeof user.team === 'string' ? user.team : user.team.name) : null,
-        dueDate: formData.dueDate ? formData.dueDate : (dueDatePicker ? dueDatePicker.toISOString() : null),
-        tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-        leadComment: formData.leadComment || null
+        assignedToId: formData.assignedToId
+          ? parseInt(formData.assignedToId, 10)
+          : (user?.id || null),
+        teamName: user?.team
+          ? (typeof user.team === 'string' ? user.team : user.team.name)
+          : null,
+        dueDate: formData.dueDate
+          ? formData.dueDate
+          : (dueDatePicker ? dueDatePicker.toISOString() : null),
+        tags: formData.tags
+          ? formData.tags.split(',').map(t => t.trim()).filter(Boolean)
+          : [],
+        leadComment: formData.leadComment || null,
       };
 
-      // Note: apiFetch stringifies and throws nicely on non-OK responses
       const created = await apiFetch('/leads', token, {
         method: 'POST',
-        body: payload
+        body: payload,
       });
 
-      // success UX
       if (typeof onSuccess === 'function') await onSuccess(created);
       if (typeof onClose === 'function') onClose();
     } catch (err) {
       console.error('AddLead error', err);
-      alert(err.message || 'Failed to create lead');
+      alert(err.message || 'Failed to create record');
     } finally {
       setLoading(false);
     }
@@ -197,59 +227,98 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
-          <h2 className="text-xl font-bold text-white">Add New Lead</h2>
-          <button onClick={onClose} className="p-2 hover:bg-blue-500 rounded-lg transition-colors">
+          <h2 className="text-xl font-bold text-white">Add New {formData.status === 'sale' ? 'Sale' : formData.status === 'callback' ? 'Call Back' : formData.status === 'transfer' ? 'Transfer' : 'Lead'}</h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-blue-500 rounded-lg transition-colors"
+          >
             <X className="w-5 h-5 text-white" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-8">
-          {/* Sale Information */}
+          {/* Contact Information (formerly Sale Information) */}
           <div className="bg-purple-50 rounded-xl p-6 border border-purple-200">
             <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5 text-purple-600" />
-              Sale Information
+              Contact Information
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Sale Date</label>
-                <input type="date" name="saleDate" value={formData.saleDate} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" />
+                <input
+                  type="date"
+                  name="saleDate"
+                  value={formData.saleDate}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Agent Name</label>
-                <input type="text" name="agentName" value={formData.agentName} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" />
+                <input
+                  type="text"
+                  name="agentName"
+                  value={formData.agentName}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Closer Name</label>
-                <input type="text" name="closerName" value={formData.closerName} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" />
+                <input
+                  type="text"
+                  name="closerName"
+                  value={formData.closerName}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Pseudo</label>
-                <input type="text" name="pseudo" value={formData.pseudo} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" />
+                <input
+                  type="text"
+                  name="pseudo"
+                  value={formData.pseudo}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
               </div>
             </div>
           </div>
 
-          {/* Company Details */}
+          {/* Company / Customer Details */}
           <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
             <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <Building className="w-5 h-5 text-blue-600" />
-              Company Details
+              Company / Customer Details
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Company Name <span className="text-red-500">*</span>
+                  Customer Name <span className="text-red-500">*</span>
                 </label>
-                <input name="companyName" value={formData.companyName} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg" placeholder="Acme Corporation Ltd" />
+                <input
+                  name="companyName"
+                  value={formData.companyName}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2 border rounded-lg"
+                  placeholder="Acme Corporation Ltd"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Company Type</label>
-                <select name="companyType" value={formData.companyType} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg">
+                <select
+                  name="companyType"
+                  value={formData.companyType}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
                   <option value="">Select type...</option>
                   <option value="Ltd & Partnership">Ltd & Partnership</option>
                   <option value="Sole Trader">Sole Trader</option>
@@ -258,32 +327,75 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
               </div>
 
               <div className="lg:col-span-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Company Address <span className="text-red-500">*</span></label>
-                <textarea name="companyAddress" value={formData.companyAddress} onChange={handleChange} required rows="2" className="w-full px-3 py-2 border rounded-lg" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Company Address <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  name="companyAddress"
+                  value={formData.companyAddress}
+                  onChange={handleChange}
+                  required
+                  rows="2"
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Business Nature <span className="text-red-500">*</span></label>
-                <input name="businessNature" value={formData.businessNature} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg" placeholder="Retail, Services, etc." />
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Business Nature <span className="text-red-500">*</span>
+                </label>
+                <input
+                  name="businessNature"
+                  value={formData.businessNature}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2 border rounded-lg"
+                  placeholder="Retail, Services, etc."
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile <span className="text-red-500">*</span></label>
-                <input name="mobile" value={formData.mobile} onChange={handleChange} required className="w-full px-3 py-2 border rounded-lg" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Mobile <span className="text-red-500">*</span>
+                </label>
+                <input
+                  name="mobile"
+                  value={formData.mobile}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email (optional)</label>
-                <input name="email" type="email" value={formData.email} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email (optional)
+                </label>
+                <input
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
               </div>
 
               <div className="lg:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
-                <input name="website" type="url" value={formData.website} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Website
+                </label>
+                <input
+                  name="website"
+                  type="url"
+                  value={formData.website}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
               </div>
             </div>
           </div>
 
+          {/* Lead Management */}
           <div className="bg-indigo-50 rounded-xl p-6 border border-indigo-200">
             <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-indigo-600" /> Lead Management
@@ -291,21 +403,34 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select name="status" value={formData.status} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Status
+                </label>
+                <select
+                  name="status"
+                  value={formData.status}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded-lg"
+                >
                   <option value="lead">Lead</option>
-                  <option value="callback">Callback</option>
+                  <option value="callback">Call Back</option>
                   <option value="sale">Sale</option>
+                  <option value="transfer">Transfer</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date & Time</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Due Date &amp; Time
+                </label>
                 <ReactDatePicker
                   selected={dueDatePicker}
                   onChange={date => {
                     setDueDatePicker(date);
-                    setFormData(prev => ({ ...prev, dueDate: date ? date.toISOString() : '' }));
+                    setFormData(prev => ({
+                      ...prev,
+                      dueDate: date ? date.toISOString() : '',
+                    }));
                   }}
                   showTimeSelect
                   timeFormat="HH:mm"
@@ -314,17 +439,33 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
                   className="w-full px-3 py-2 border rounded-lg"
                   placeholderText="Select date and time"
                 />
-                <p className="text-xs text-gray-500 mt-1">Pick both date and time (local).</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Pick both date and time (local).
+                </p>
               </div>
 
-              {(userRole === 'admin' || userRole === 'team_lead' || userRole === 'Team Lead') && (
+              {(userRole === 'admin' ||
+                userRole === 'team_lead' ||
+                userRole === 'Team Lead') && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Assign To</label>
-                  <select name="assignedToId" value={formData.assignedToId} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Assign To
+                  </label>
+                  <select
+                    name="assignedToId"
+                    value={formData.assignedToId}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  >
                     <option value="">Unassigned</option>
                     {availableAssignees.map(u => (
                       <option key={u.id} value={u.id}>
-                        {u.name} {u.team ? `(${typeof u.team === 'string' ? u.team : u.team?.name})` : ''}
+                        {u.name}{' '}
+                        {u.team
+                          ? `(${typeof u.team === 'string'
+                              ? u.team
+                              : u.team?.name})`
+                          : ''}
                       </option>
                     ))}
                   </select>
@@ -332,24 +473,49 @@ export default function AddLeadModal({ onClose, onSuccess, token, user = {}, use
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
-                <input name="tags" value={formData.tags} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg" placeholder="urgent, high-value" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tags
+                </label>
+                <input
+                  name="tags"
+                  value={formData.tags}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  placeholder="urgent, high-value"
+                />
                 <p className="text-xs text-gray-500 mt-1">Comma-separated</p>
               </div>
             </div>
 
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Comment</label>
-              <textarea name="leadComment" value={formData.leadComment || ''} onChange={handleChange} rows="4" className="w-full px-3 py-2 border rounded-lg resize-none" placeholder="Add a comment..." />
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Comment
+              </label>
+              <textarea
+                name="leadComment"
+                value={formData.leadComment || ''}
+                onChange={handleChange}
+                rows="4"
+                className="w-full px-3 py-2 border rounded-lg resize-none"
+                placeholder="Add a comment..."
+              />
             </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4 border-t border-gray-200 sticky bottom-0 bg-white">
-            <button type="submit" disabled={loading} className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg">
-              {loading ? 'Adding Lead...' : 'Add Lead'}
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold rounded-lg"
+            >
+              {loading ? 'Adding...' : 'Add'}
             </button>
-            <button type="button" onClick={onClose} className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg"
+            >
               Cancel
             </button>
           </div>
