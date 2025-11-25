@@ -310,7 +310,7 @@ export default function LeadsPage() {
                         <Eye className="w-3 h-3" />
                         View
                       </button>
-                      {canManageLeads && (
+                      
                         <button
                           type="button"
                           onClick={() => handleDelete(l.id)}
@@ -319,7 +319,7 @@ export default function LeadsPage() {
                           <Trash2 className="w-3 h-3" />
                           Delete
                         </button>
-                      )}
+                      
                     </div>
                   </div>
                 </td>

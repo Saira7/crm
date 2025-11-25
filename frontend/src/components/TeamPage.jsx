@@ -392,7 +392,7 @@ export default function TeamPage() {
                     value={editTeam}
                     onChange={(e) => setEditTeam(e.target.value)}
                     className="w-full px-4 py-2 border rounded-lg"
-                    disabled={((userRole || '').toString().toLowerCase() !== 'admin')}
+                    //disabled={((userRole || '').toString().toLowerCase() !== 'admin')}
                   >
                     <option value="">Select team</option>
                     {teams.map(t => (
