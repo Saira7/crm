@@ -197,13 +197,17 @@ export default function CRMLayout() {
     };
   }, [user, token, userRole]);
 
-  const navItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/leads', icon: Users, label: 'Leads' },
-    ...(userRole === 'admin' || userRole === 'team_lead'||userRole === 'Team Lead'
-      ? [{ path: '/team', icon: UsersRound, label: 'Team' }]
-      : []),
-  ];
+ const navItems = [
+  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/leads', icon: Users, label: 'Leads' },
+  ...(userRole === 'admin' || userRole === 'team_lead' || userRole === 'Team Lead'
+    ? [
+        { path: '/team', icon: UsersRound, label: 'Team' },
+        { path: '/team-overview', icon: UsersRound, label: 'Team Overview' }, // ⬅ new
+      ]
+    : []),
+];
+
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-gray-50">
