@@ -66,7 +66,7 @@ router.get('/', requireAuth, async (req, res) => {
     let where = {};
     if (roleName === 'admin') {
       where = {};
-    } else if (roleName === 'team_lead') {
+    } else if (roleName === 'team_lead'||roleName === 'Team Lead') {
       const teamName = reqUser?.team?.name || null;
       where = teamName ? { teamName } : { assignedToId: reqUser.id };
     } else {
@@ -134,7 +134,7 @@ router.post('/', requireAuth, async (req, res) => {
         if (requesterRole === 'admin') {
           // Admin can assign to anyone - no restrictions
           // assignedToId remains as provided
-        } else if (requesterRole === 'team_lead') {
+        } else if (requesterRole === 'team_lead'||requesterRole === 'Team Lead') {
           // Team lead can assign to themselves or team members
           const targetTeam = targetUser?.team?.name || null;
           if (targetTeam !== requesterTeam) {
@@ -145,7 +145,7 @@ router.post('/', requireAuth, async (req, res) => {
         } else {
           // Regular user can only assign to themselves or their team lead
           const targetTeam = targetUser?.team?.name || null;
-          const isTargetTeamLead = targetUser?.role?.name === 'team_lead';
+          const isTargetTeamLead = targetUser?.role?.name === 'team_lead' || targetUser?.role?.name === 'Team Lead';
           
           // Check if target is either:
           // 1. The requester themselves, OR

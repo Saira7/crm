@@ -4,7 +4,6 @@ import { X, Save, Edit2 } from 'lucide-react';
 import ReactDatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
-// Move InputRow outside to prevent re-creation on each render
 const InputRow = ({
   label,
   name,
