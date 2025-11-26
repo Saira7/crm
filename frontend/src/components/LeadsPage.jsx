@@ -60,12 +60,9 @@ export default function LeadsPage() {
 
   // Which leads this user can see
   const accessible = useMemo(() => {
-    // if (!user) return [];
-    // if (normRole === 'admin') return leads;
-    // if (normRole === 'team_lead' || normRole === 'team lead' || normRole === 'team-lead') {
-    //   return leads.filter((l) => l.teamName === userTeam);
-    // }
+    
     return leads.filter((l) => l.assignedToId === user.id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leads, normRole, user, userTeam]);
 
   // Filter by tab (status)
@@ -92,11 +89,7 @@ export default function LeadsPage() {
     );
   }, [byStatus, q]);
 
-  // who can delete / manage leads
-  const canManageLeads = ['admin', 'manager', 'team_lead', 'team lead', 'team-lead'].includes(
-    normRole
-  );
-
+  
   // assignment options for dropdown
   const assignableUsers = useMemo(() => {
     if (!Array.isArray(users) || !user) return [];
@@ -147,21 +140,21 @@ export default function LeadsPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!canManageLeads) return;
-    const ok = window.confirm('Are you sure you want to delete this record?');
-    if (!ok) return;
+  const ok = window.confirm('Are you sure you want to delete this record?');
+  if (!ok) return;
 
-    try {
-      await apiFetch(`/leads/${id}`, token, {
-        method: 'DELETE',
-      });
-      setLeads((prev) => prev.filter((l) => l.id !== id));
-      if (selected?.id === id) setSelected(null);
-    } catch (err) {
-      console.error('Delete failed', err);
-      alert(err.message || 'Failed to delete');
-    }
-  };
+  try {
+    await apiFetch(`/leads/${id}`, token, {
+      method: 'DELETE',
+    });
+    setLeads((prev) => prev.filter((l) => l.id !== id));
+    if (selected?.id === id) setSelected(null);
+  } catch (err) {
+    console.error('Delete failed', err);
+    alert(err.message || 'Failed to delete');
+  }
+};
+
 
   const handleAssignChange = async (leadId, assignedToIdStr) => {
     const assignedToId = assignedToIdStr ? parseInt(assignedToIdStr, 10) : null;
@@ -245,7 +238,7 @@ export default function LeadsPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs font-semibold text-gray-600">
             <tr>
-              <th className="p-3 text-left">Customer Name</th>
+              <th className="p-3 text-left">Company Name</th>
               <th className="p-3 text-left">Contact</th>
               <th className="p-3 text-left">Comment</th>
               <th className="p-3 text-left">Due</th>
@@ -261,6 +254,7 @@ export default function LeadsPage() {
                     <div className="text-xs text-gray-500 mt-0.5">{l.email}</div>
                   )}
                 </td>
+
                 <td className="p-3 align-top">
                   <div className="text-gray-800">{l.mobile}</div>
                 </td>
