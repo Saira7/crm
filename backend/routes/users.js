@@ -97,7 +97,7 @@ router.post('/', requireAuth, async (req, res) => {
         finalTeamId = team.id;
       }
     } else if (isTeamLead) {
-      // force new user into the same team as the team lead
+      // Team lead can ONLY create members in their own team
       const requester = await prisma.user.findUnique({ where: { id: requesterId } });
       if (!requester || !requester.teamId) {
         return res.status(400).json({ error: 'Your team is not configured; contact an admin' });
@@ -136,6 +136,7 @@ router.post('/', requireAuth, async (req, res) => {
  *   - admin: can edit anyone
  *   - team_lead: can edit users in their own team (but not themselves)
  *   - no one can edit themselves via this endpoint
+ *   - team_lead CAN transfer their team members to other teams (via teamId)
  */
 router.patch('/:id', requireAuth, async (req, res) => {
   try {
@@ -230,22 +231,15 @@ router.patch('/:id', requireAuth, async (req, res) => {
       }
 
       if (body.teamId !== undefined) {
-        if (isAdmin) {
-          if (body.teamId === null || body.teamId === '') {
-            data.teamId = null;
-          } else {
-            const newTeam = await prisma.team.findUnique({ where: { id: body.teamId } });
-            if (!newTeam) {
-              return res.status(400).json({ error: 'Invalid teamId' });
-            }
-            data.teamId = newTeam.id;
+        // both admin and team_lead can set ANY valid teamId (this is the "transfer" ability)
+        if (body.teamId === null || body.teamId === '') {
+          data.teamId = null;
+        } else {
+          const newTeam = await prisma.team.findUnique({ where: { id: body.teamId } });
+          if (!newTeam) {
+            return res.status(400).json({ error: 'Invalid teamId' });
           }
-        } else if (isTeamLead) {
-          // force same team as the requester
-          if (!requester?.teamId) {
-            return res.status(400).json({ error: 'Your team is not configured; contact an admin' });
-          }
-          data.teamId = requester.teamId;
+          data.teamId = newTeam.id;
         }
       }
     }
