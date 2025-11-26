@@ -114,7 +114,7 @@ export default function AddLeadModal({
 
   const validateMinimum = () => {
     if (!formData.companyName || !formData.companyAddress || !formData.businessNature || !formData.mobile) {
-      return 'Please fill in required fields: Customer Name, Company Address, Business Nature and Mobile';
+      return 'Please fill in required fields: Customer Name,Company Name, Company Address, Business Nature and Mobile';
     }
     return null;
   };
@@ -139,6 +139,7 @@ export default function AddLeadModal({
 
         // company (customer)
         companyName: formData.companyName,
+
         companyType: formData.companyType || null,
         registrationNumber: formData.registrationNumber || null,
         tradingName: formData.tradingName || null,
@@ -300,7 +301,7 @@ export default function AddLeadModal({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Customer Name <span className="text-red-500">*</span>
+                  Company Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   name="companyName"
@@ -311,6 +312,18 @@ export default function AddLeadModal({
                   placeholder="Acme Corporation Ltd"
                 />
               </div>
+              <div>
+    <label className="block text-sm font-medium text-gray-700 mb-1">
+      Customer Name
+    </label>
+    <input
+      name="directorOwnerName1"
+      value={formData.directorOwnerName1}
+      onChange={handleChange}
+      className="w-full px-3 py-2 border rounded-lg"
+      placeholder="Primary director / customer name"
+    />
+  </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Company Type</label>
                 <select
