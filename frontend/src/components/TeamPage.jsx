@@ -120,10 +120,7 @@ export default function TeamPage() {
       if (!teams.some(t => t.name === editTeam)) {
         return setError('Invalid team selected');
       }
-      // team lead may not move users to other teams
-      if (isTeamLead && editTeam !== userTeam) {
-        return setError('Team Leads can only assign users to their own team');
-      }
+      
     }
 
     if (editPassword && editPassword.trim().length > 0 && editPassword.length < 6) {
