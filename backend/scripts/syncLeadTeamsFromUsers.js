@@ -11,11 +11,9 @@ async function main() {
   });
 
   for (const u of users) {
-    const teamId = u.teamId || null;
     const teamName = u.team?.name || null;
 
-    // If user has no team, skip or clear – here we skip
-    if (!teamId && !teamName) {
+    if (!teamName) {
       console.log(
         `User ${u.id} (${u.name || u.email}) has no team, skipping...`
       );
@@ -25,13 +23,12 @@ async function main() {
     const result = await prisma.lead.updateMany({
       where: { assignedToId: u.id },
       data: {
-        teamId,
-        teamName,
+        teamName, // 🔹 only teamName exists on Lead
       },
     });
 
     console.log(
-      `User ${u.id} (${u.name || u.email}) -> teamId=${teamId}, teamName=${teamName}, updated leads=${result.count}`
+      `User ${u.id} (${u.name || u.email}) -> teamName="${teamName}", updated leads=${result.count}`
     );
   }
 

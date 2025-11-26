@@ -187,9 +187,10 @@ router.patch('/:id', requireAuth, async (req, res) => {
     const body = req.body || {};
     const data = {};
 
-    // we’ll track if team changed to move leads
-    let shouldTransferLeads = false;
-    let newTeamIdForLeads = null;
+    // track if we must update leads' teamName
+    // undefined => don't touch leads
+    // string|null => new teamName for all leads
+    let newTeamNameForLeads = undefined;
 
     // Basic fields
     if (body.name !== undefined) {
@@ -236,12 +237,10 @@ router.patch('/:id', requireAuth, async (req, res) => {
 
       if (body.teamId !== undefined) {
         if (body.teamId === null || body.teamId === '') {
-          // user being moved to "no team"
+          // remove user from any team
           data.teamId = null;
           if (target.teamId !== null) {
-            // team actually changed
-            shouldTransferLeads = true;
-            newTeamIdForLeads = null;
+            newTeamNameForLeads = null; // leads become "no team"
           }
         } else {
           const newTeam = await prisma.team.findUnique({ where: { id: body.teamId } });
@@ -250,10 +249,9 @@ router.patch('/:id', requireAuth, async (req, res) => {
           }
           data.teamId = newTeam.id;
 
-          // if team is different from previous one, mark for lead transfer
+          // if team changed, update leads' teamName to newTeam.name
           if (target.teamId !== newTeam.id) {
-            shouldTransferLeads = true;
-            newTeamIdForLeads = newTeam.id;
+            newTeamNameForLeads = newTeam.name;
           }
         }
       }
@@ -286,11 +284,13 @@ router.patch('/:id', requireAuth, async (req, res) => {
       include: { role: true, team: true },
     });
 
-    // 2) if the team changed, move all their leads to the same team
-    if (shouldTransferLeads) {
+    // 2) if team changed, update ALL their leads' teamName
+    if (newTeamNameForLeads !== undefined) {
       await prisma.lead.updateMany({
         where: { assignedToId: id },
-        data: { teamId: newTeamIdForLeads },
+        data: {
+          teamName: newTeamNameForLeads,
+        },
       });
     }
 
@@ -301,6 +301,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 
 /**
