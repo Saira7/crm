@@ -60,11 +60,11 @@ export default function LeadsPage() {
 
   // Which leads this user can see
   const accessible = useMemo(() => {
-    if (!user) return [];
-    if (normRole === 'admin') return leads;
-    if (normRole === 'team_lead' || normRole === 'team lead' || normRole === 'team-lead') {
-      return leads.filter((l) => l.teamName === userTeam);
-    }
+    // if (!user) return [];
+    // if (normRole === 'admin') return leads;
+    // if (normRole === 'team_lead' || normRole === 'team lead' || normRole === 'team-lead') {
+    //   return leads.filter((l) => l.teamName === userTeam);
+    // }
     return leads.filter((l) => l.assignedToId === user.id);
   }, [leads, normRole, user, userTeam]);
 
