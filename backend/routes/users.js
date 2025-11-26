@@ -187,6 +187,10 @@ router.patch('/:id', requireAuth, async (req, res) => {
     const body = req.body || {};
     const data = {};
 
+    // we’ll track if team changed to move leads
+    let shouldTransferLeads = false;
+    let newTeamIdForLeads = null;
+
     // Basic fields
     if (body.name !== undefined) {
       if (!body.name || !body.name.trim()) {
@@ -231,15 +235,26 @@ router.patch('/:id', requireAuth, async (req, res) => {
       }
 
       if (body.teamId !== undefined) {
-        // both admin and team_lead can set ANY valid teamId (this is the "transfer" ability)
         if (body.teamId === null || body.teamId === '') {
+          // user being moved to "no team"
           data.teamId = null;
+          if (target.teamId !== null) {
+            // team actually changed
+            shouldTransferLeads = true;
+            newTeamIdForLeads = null;
+          }
         } else {
           const newTeam = await prisma.team.findUnique({ where: { id: body.teamId } });
           if (!newTeam) {
             return res.status(400).json({ error: 'Invalid teamId' });
           }
           data.teamId = newTeam.id;
+
+          // if team is different from previous one, mark for lead transfer
+          if (target.teamId !== newTeam.id) {
+            shouldTransferLeads = true;
+            newTeamIdForLeads = newTeam.id;
+          }
         }
       }
     }
@@ -264,11 +279,20 @@ router.patch('/:id', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
 
+    // 1) update the user
     const updated = await prisma.user.update({
       where: { id },
       data,
       include: { role: true, team: true },
     });
+
+    // 2) if the team changed, move all their leads to the same team
+    if (shouldTransferLeads) {
+      await prisma.lead.updateMany({
+        where: { assignedToId: id },
+        data: { teamId: newTeamIdForLeads },
+      });
+    }
 
     const { password: _pw, ...safeUser } = updated;
     res.json(safeUser);
@@ -277,6 +301,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 /**
  * DELETE /api/users/:id
