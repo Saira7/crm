@@ -350,7 +350,7 @@ router.put('/:id', requireAuth, async (req, res) => {
           if (requesterRole === 'admin') {
             // Admin can assign to anyone
             patch.assignedTo = { connect: { id: assignedToId } };
-          } else if (requesterRole === 'team_lead') {
+          } else if (requesterRole === 'team_lead'||requesterRole === 'Team Lead') {
             // Team lead can assign to themselves or team members
             const targetTeam = targetUser?.team?.name || null;
             if (targetTeam === requesterTeam) {
@@ -362,7 +362,7 @@ router.put('/:id', requireAuth, async (req, res) => {
           } else {
             // Regular user can only assign to themselves or their team lead
             const targetTeam = targetUser?.team?.name || null;
-            const isTargetTeamLead = targetUser?.role?.name === 'team_lead';
+            const isTargetTeamLead = targetUser?.role?.name === 'team_lead'|| targetUser?.role?.name === 'Team Lead';
             
             if (assignedToId === requester.id || (isTargetTeamLead && targetTeam === requesterTeam)) {
               patch.assignedTo = { connect: { id: assignedToId } };
