@@ -1,9 +1,15 @@
 // src/components/StickyNotesPanel.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import { apiFetch } from '../api';
 import { X, Plus, Pin, PinOff, Trash2 } from 'lucide-react';
+import { AuthContext } from './AuthContext';
 
 export default function StickyNotesPanel({ token, isOpen, onClose }) {
+  const { token: ctxToken } = useContext(AuthContext);
+
+  // Use prop token if provided, otherwise use AuthContext token
+  const effectiveToken = token || ctxToken;
+
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -12,10 +18,10 @@ export default function StickyNotesPanel({ token, isOpen, onClose }) {
   const [newTitle, setNewTitle] = useState('');
 
   const loadNotes = async () => {
-    if (!token) return;
+    if (!effectiveToken) return;
     setLoading(true);
     try {
-      const data = await apiFetch('/notes', token);
+      const data = await apiFetch('/notes', effectiveToken);
       setNotes(data || []);
     } catch (err) {
       console.error('Failed to load notes', err);
@@ -25,17 +31,18 @@ export default function StickyNotesPanel({ token, isOpen, onClose }) {
   };
 
   useEffect(() => {
-    if (isOpen) {
+    // Default: when used as a page (no isOpen prop) -> load notes
+    if (isOpen === undefined || isOpen) {
       loadNotes();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, token]);
+  }, [isOpen, effectiveToken]);
 
   const handleCreate = async () => {
-    if (!newContent.trim()) return;
+    if (!newContent.trim() || !effectiveToken) return;
     try {
       setSaving(true);
-      const created = await apiFetch('/notes', token, {
+      const created = await apiFetch('/notes', effectiveToken, {
         method: 'POST',
         body: JSON.stringify({
           title: newTitle || null,
@@ -54,8 +61,9 @@ export default function StickyNotesPanel({ token, isOpen, onClose }) {
   };
 
   const handleUpdate = async (id, patch) => {
+    if (!effectiveToken) return;
     try {
-      const updated = await apiFetch(`/notes/${id}`, token, {
+      const updated = await apiFetch(`/notes/${id}`, effectiveToken, {
         method: 'PATCH',
         body: JSON.stringify(patch),
       });
@@ -67,10 +75,11 @@ export default function StickyNotesPanel({ token, isOpen, onClose }) {
   };
 
   const handleDelete = async (id) => {
+    if (!effectiveToken) return;
     const ok = window.confirm('Delete this note?');
     if (!ok) return;
     try {
-      await apiFetch(`/notes/${id}`, token, { method: 'DELETE' });
+      await apiFetch(`/notes/${id}`, effectiveToken, { method: 'DELETE' });
       setNotes((prev) => prev.filter((n) => n.id !== id));
     } catch (err) {
       console.error('Delete note failed', err);
@@ -78,14 +87,28 @@ export default function StickyNotesPanel({ token, isOpen, onClose }) {
     }
   };
 
-  if (!isOpen) return null;
+  // Default open: if isOpen is undefined (route case), treat as true
+  const open = isOpen !== false;
+  if (!open) return null;
+
+  // Default onClose: no-op if not provided (route case)
+  const handleClose = onClose || (() => {});
+
+  if (!effectiveToken) {
+    // Should not really happen since AuthContext has token, but just in case
+    return (
+      <div className="p-4 text-sm text-red-500">
+        Not authenticated. Please log in again.
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       {/* backdrop */}
       <div
         className="flex-1 bg-black bg-opacity-30"
-        onClick={onClose}
+        onClick={handleClose}
       />
 
       {/* panel */}
@@ -100,7 +123,7 @@ export default function StickyNotesPanel({ token, isOpen, onClose }) {
           </div>
           <button
             className="p-1 rounded hover:bg-gray-100"
-            onClick={onClose}
+            onClick={handleClose}
           >
             <X className="w-4 h-4 text-gray-500" />
           </button>
