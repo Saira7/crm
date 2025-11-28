@@ -1,10 +1,10 @@
 // src/components/StickyNotesPanel.jsx
 import React, { useEffect, useState, useContext } from 'react';
 import { apiFetch } from '../api';
-import { X, Plus, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Plus, Pin, PinOff, Trash2 } from 'lucide-react';
 import { AuthContext } from './AuthContext';
 
-export default function StickyNotesPanel({ onClose }) {
+export default function StickyNotesPanel() {
   const { token } = useContext(AuthContext);
 
   const [notes, setNotes] = useState([]);
@@ -61,7 +61,6 @@ export default function StickyNotesPanel({ onClose }) {
         method: 'PATCH',
         body: JSON.stringify(patch),
       });
-      // merge back the updated note
       setNotes((prev) => prev.map((n) => (n.id === id ? updated : n)));
     } catch (err) {
       console.error('Update note failed', err);
@@ -90,9 +89,8 @@ export default function StickyNotesPanel({ onClose }) {
     );
   }
 
-  // 👉 permanent sidebar: no overlay, just right column
   return (
-    <div className="h-full w-80 border-l border-gray-200 bg-white flex flex-col shadow-xl">
+    <div className="h-full w-80 border-l border-gray-200 bg-white flex flex-col shadow-lg">
       {/* header */}
       <div className="px-4 py-3 border-b flex items-center justify-between">
         <div>
@@ -101,14 +99,6 @@ export default function StickyNotesPanel({ onClose }) {
             Quick personal notes. Only you can see these.
           </p>
         </div>
-        {onClose && (
-          <button
-            className="p-1 rounded hover:bg-gray-100"
-            onClick={onClose}
-          >
-            <X className="w-4 h-4 text-gray-500" />
-          </button>
-        )}
       </div>
 
       {/* new note form */}
@@ -163,7 +153,6 @@ export default function StickyNotesPanel({ onClose }) {
                 placeholder="Title"
                 onChange={(e) => {
                   const value = e.target.value;
-                  // update local state so typing (including spaces) feels instant
                   setNotes((prev) =>
                     prev.map((n) =>
                       n.id === note.id ? { ...n, title: value } : n
@@ -196,7 +185,6 @@ export default function StickyNotesPanel({ onClose }) {
               value={note.content || ''}
               onChange={(e) => {
                 const value = e.target.value;
-                // local state update (supports spaces, enter, etc.)
                 setNotes((prev) =>
                   prev.map((n) =>
                     n.id === note.id ? { ...n, content: value } : n

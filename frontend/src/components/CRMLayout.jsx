@@ -14,7 +14,8 @@ import {
   AlertCircle,
   Clock,
 } from 'lucide-react';
-import StickyNotesPanel from './StickyNotes';
+import StickyNotesPanel from '../components/StickyNotes';
+
 function NotificationBell({ notifications, onToggle, isOpen }) {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -89,30 +90,26 @@ export default function CRMLayout() {
     navigate('/');
   };
 
-  // Fetch leads periodically and create due-date notifications
+  // Notifications / due date logic
   useEffect(() => {
-    // don't start if no user or no token
     if (!user?.id || !token) return;
 
     let cancelled = false;
 
     const checkLeads = async () => {
-      // guard in-case token got removed in between
       if (!token || !user?.id) return;
 
       try {
         const data = await apiFetch('/leads', token);
         if (!Array.isArray(data)) return;
 
-        // Determine accessible leads for this user (server already filters for non-admins,
-        // but we still filter to assigned leads for notifications to avoid spamming)
         const myLeads = data.filter((lead) => {
-          // prefer explicit assignedToId match
           if (lead.assignedToId && user?.id) return lead.assignedToId === user.id;
-          // fallback: if team-based, compare teamName
           const leadTeam = lead.teamName || null;
-          const userTeam = typeof user?.team === 'string' ? user.team : user?.team?.name;
-          if (userRole === 'team_lead' && leadTeam && userTeam) return leadTeam === userTeam;
+          const userTeam =
+            typeof user?.team === 'string' ? user.team : user?.team?.name;
+          if (userRole === 'team_lead' && leadTeam && userTeam)
+            return leadTeam === userTeam;
           return false;
         });
 
@@ -129,34 +126,40 @@ export default function CRMLayout() {
           const diffHours = Math.floor(diffHoursFloat);
           const diffDays = Math.floor(diffHoursFloat / 24);
 
-          // Build a canonical message key to avoid duplicates
-          const msgKey = `due:${lead.id}:${diffHours <= 0 ? 'overdue' : (diffHours <= 48 ? 'due_soon' : 'future')}`;
+          const msgKey = `due:${lead.id}:${
+            diffHours <= 0 ? 'overdue' : diffHours <= 48 ? 'due_soon' : 'future'
+          }`;
 
           if (diffHours < 0) {
-            // Overdue
             const hoursAgo = Math.abs(diffHours);
             const daysAgo = Math.floor(hoursAgo / 24);
 
             const message =
               daysAgo > 0
-                ? `Lead "${lead.companyName}" is ${daysAgo} day${daysAgo !== 1 ? 's' : ''} overdue.`
-                : `Lead "${lead.companyName}" is ${hoursAgo} hour${hoursAgo !== 1 ? 's' : ''} overdue.`;
+                ? `Lead "${lead.companyName}" is ${daysAgo} day${
+                    daysAgo !== 1 ? 's' : ''
+                  } overdue.`
+                : `Lead "${lead.companyName}" is ${hoursAgo} hour${
+                    hoursAgo !== 1 ? 's' : ''
+                  } overdue.`;
 
             newNotes.push({
               key: msgKey,
               type: 'due',
               leadId: lead.id,
               message,
-              // show date + time
               time: due.toLocaleString(),
-              read: false
+              read: false,
             });
           } else if (diffHours <= 48) {
-            // Due soon (within 48 hours)
             const message =
               diffDays > 0
-                ? `Lead "${lead.companyName}" is due in ${diffDays} day${diffDays !== 1 ? 's' : ''}.`
-                : `Lead "${lead.companyName}" is due in ${diffHours} hour${diffHours !== 1 ? 's' : ''}.`;
+                ? `Lead "${lead.companyName}" is due in ${diffDays} day${
+                    diffDays !== 1 ? 's' : ''
+                  }.`
+                : `Lead "${lead.companyName}" is due in ${diffHours} hour${
+                    diffHours !== 1 ? 's' : ''
+                  }.`;
 
             newNotes.push({
               key: msgKey,
@@ -164,7 +167,7 @@ export default function CRMLayout() {
               leadId: lead.id,
               message,
               time: due.toLocaleString(),
-              read: false
+              read: false,
             });
           }
         });
@@ -173,23 +176,19 @@ export default function CRMLayout() {
 
         if (newNotes.length > 0) {
           setNotifications((prev) => {
-            // keep new unique messages (by key)
             const existingKeys = new Set(prev.map((p) => p.key));
             const uniqueNew = newNotes.filter((n) => !existingKeys.has(n.key));
-            // add unique new to top
             const merged = [...uniqueNew, ...prev].slice(0, 20);
             return merged;
           });
         }
       } catch (err) {
-        // Only log once (no spam) and handle authorization-specific case gracefully
         console.warn('Notifications fetch failed:', err.message || err);
       }
     };
 
-    // run immediately then schedule
     checkLeads();
-    const interval = setInterval(checkLeads, 60_000); // every 60s
+    const interval = setInterval(checkLeads, 60_000);
 
     return () => {
       cancelled = true;
@@ -197,18 +196,18 @@ export default function CRMLayout() {
     };
   }, [user, token, userRole]);
 
- const navItems = [
-  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/leads', icon: Users, label: 'Leads' },
-  ...(userRole === 'admin' || userRole === 'team_lead' || userRole === 'Team Lead'
-    ? [
-        { path: '/team', icon: UsersRound, label: 'Team' },
-        { path: '/team-overview', icon: UsersRound, label: 'Team Overview' }, 
-      ]
-    : []),
-  //{ path: '/sticky-notes', icon: Clock, label: 'Sticky Notes' }, 
-];
-
+  const navItems = [
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/leads', icon: Users, label: 'Leads' },
+    ...(userRole === 'admin' ||
+    userRole === 'team_lead' ||
+    userRole === 'Team Lead'
+      ? [
+          { path: '/team', icon: UsersRound, label: 'Team' },
+          { path: '/team-overview', icon: UsersRound, label: 'Team Overview' },
+        ]
+      : []),
+  ];
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-gray-50">
@@ -219,11 +218,12 @@ export default function CRMLayout() {
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
               CRM
             </div>
-            <span className="font-semibold text-gray-900 text-lg">LeadFlow</span>
+            <span className="font-semibold text-gray-900 text-lg">
+              LeadFlow
+            </span>
           </div>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
           {navItems.map((item) => (
             <NavLink
@@ -243,7 +243,6 @@ export default function CRMLayout() {
           ))}
         </nav>
 
-        {/* User Profile */}
         <div className="p-4 border-t border-gray-200">
           <div className="flex items-center gap-3 px-3 py-2">
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white font-medium text-sm">
@@ -292,7 +291,7 @@ export default function CRMLayout() {
                   LeadFlow
                 </span>
               </div>
-              <button 
+              <button
                 onClick={() => setSidebarOpen(false)}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
@@ -320,7 +319,6 @@ export default function CRMLayout() {
               ))}
             </nav>
 
-            {/* Mobile User Profile */}
             <div className="p-4 border-t border-gray-200">
               <div className="flex items-center gap-3 px-3 py-2">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white font-medium text-sm">
@@ -354,7 +352,7 @@ export default function CRMLayout() {
         </>
       )}
 
-      {/* Main Content */}
+      {/* Main Content + Sticky Notes */}
       <div className="flex-1 flex flex-col overflow-hidden w-full">
         {/* Top Bar */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -372,21 +370,29 @@ export default function CRMLayout() {
               notifications={notifications}
               onToggle={() => {
                 setBellOpen((prev) => !prev);
-                // mark all as read locally when opened
-                setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+                setNotifications((prev) =>
+                  prev.map((n) => ({ ...n, read: true }))
+                );
               }}
               isOpen={bellOpen}
             />
           </div>
         </header>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto bg-gray-50">
-          <div className="min-h-full w-full px-4 sm:px-6 lg:px-6 py-6">
-            <Outlet />
-          </div>
-        </main>
-        <StickyNotesPanel />
+        {/* Content row: center page + right notes */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Main page content, centered with max width */}
+          <main className="flex-1 overflow-y-auto bg-gray-50">
+            <div className="min-h-full w-full px-4 sm:px-6 lg:px-6 py-6">
+              <div className="max-w-5xl mx-auto">
+                <Outlet />
+              </div>
+            </div>
+          </main>
+
+          {/* Always-visible sticky notes on far right */}
+          <StickyNotesPanel />
+        </div>
       </div>
     </div>
   );
