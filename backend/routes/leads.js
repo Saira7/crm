@@ -3,7 +3,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const router = express.Router();
-const { requireAuth } = require('../middleware/auth'); // adjust path if needed
+const { requireAuth } = require('../middleware/auth'); 
 
 // Utility: parse a date-ish string. Accepts ISO or datetime-local ("YYYY-MM-DDTHH:mm" or "YYYY-MM-DDTHH:mm:ss" or ISO)
 function parseDateMaybe(val) {
@@ -62,15 +62,24 @@ router.get('/', requireAuth, async (req, res) => {
     const reqUser = await loadRequestingUser(req.user?.userId);
     const roleName = reqUser?.role?.name || (req.user?.role || 'user');
 
-    // Admin can see all, team_lead sees their team, others only assigned
     let where = {};
+
     if (roleName === 'admin') {
+      // admin sees all
       where = {};
-    } else if (roleName === 'team_lead'||roleName === 'Team Lead') {
+    } else if (roleName === 'team_lead' || roleName === 'Team Lead') {
+      // team lead sees own team's leads
       const teamName = reqUser?.team?.name || null;
       where = teamName ? { teamName } : { assignedToId: reqUser.id };
     } else {
-      where = { assignedToId: reqUser.id };
+      // regular user:
+      // show leads currently assigned to them OR leads they previously owned
+      where = {
+        OR: [
+          { assignedToId: reqUser.id },
+          { previousAssignedToIds: { has: reqUser.id } }
+        ]
+      };
     }
 
     const leads = await prisma.lead.findMany({
@@ -133,7 +142,6 @@ router.post('/', requireAuth, async (req, res) => {
         // Check assignment permissions based on role
         if (requesterRole === 'admin') {
           // Admin can assign to anyone - no restrictions
-          // assignedToId remains as provided
         } else if (requesterRole === 'team_lead'||requesterRole === 'Team Lead') {
           // Team lead can assign to themselves or team members
           const targetTeam = targetUser?.team?.name || null;
@@ -141,15 +149,11 @@ router.post('/', requireAuth, async (req, res) => {
             // Not in same team - assign to requester (team lead)
             assignedToId = requester.id;
           }
-          // If in same team, assignment is allowed
         } else {
           // Regular user can only assign to themselves or their team lead
           const targetTeam = targetUser?.team?.name || null;
           const isTargetTeamLead = targetUser?.role?.name === 'team_lead' || targetUser?.role?.name === 'Team Lead';
           
-          // Check if target is either:
-          // 1. The requester themselves, OR
-          // 2. A team lead in the same team
           if (assignedToId !== requester.id && (!isTargetTeamLead || targetTeam !== requesterTeam)) {
             // Not allowed - assign to requester
             assignedToId = requester.id;
@@ -159,6 +163,28 @@ router.post('/', requireAuth, async (req, res) => {
     } else {
       // No assignment specified - default to requester
       assignedToId = requester.id;
+    }
+
+    // decide teamName for the lead – from assigned user if possible
+    let leadTeamName = null;
+
+    if (assignedToId) {
+      const assignedUser = await prisma.user.findUnique({
+        where: { id: assignedToId },
+        include: { team: true }
+      });
+
+      if (assignedUser?.teamId) {
+        leadTeamName = assignedUser.team?.name || null;
+      }
+    }
+
+    if (!leadTeamName && requester?.teamId) {
+      leadTeamName = requester.team?.name || requesterTeam || null;
+    }
+
+    if (!leadTeamName && req.body.teamName) {
+      leadTeamName = req.body.teamName;
     }
 
     // Build data object for Prisma
@@ -225,9 +251,8 @@ router.post('/', requireAuth, async (req, res) => {
 
       // Lead management
       status: req.body.status || 'lead',
-      // Use relation instead of direct field
       assignedTo: assignedToId ? { connect: { id: assignedToId } } : undefined,
-      teamName: req.body.teamName || requesterTeam,
+      teamName: leadTeamName,
 
       // Comments and timestamps
       leadComment: req.body.leadComment || null,
@@ -241,7 +266,6 @@ router.post('/', requireAuth, async (req, res) => {
       dueDate: req.body.dueDate ? parseDateMaybe(req.body.dueDate) : null,
       dueDateUpdatedAt: req.body.dueDate ? new Date() : null,
 
-      // REMOVED: value field since it doesn't exist in your schema
       // tags
       tags: tags
     };
@@ -258,7 +282,6 @@ router.post('/', requireAuth, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error creating lead:', error);
-    // Prisma specific errors might be helpful here
     res.status(500).json({ error: error.message || 'Failed to create lead' });
   }
 });
@@ -274,29 +297,35 @@ router.put('/:id', requireAuth, async (req, res) => {
       return res.status(401).json({ error: 'User not found' });
     }
 
+    const existingLead = await prisma.lead.findUnique({ where: { id } });
+    if (!existingLead) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+
     const requesterRole = requester?.role?.name || (req.user?.role || 'user');
     const requesterTeam = requester?.team?.name || null;
 
-    // Build patch object only from provided fields
     const body = req.body || {};
     const patch = {};
 
-    // Map fields (only if present)
     const copyIf = (k, transform = x => x) => {
       if (body[k] !== undefined) patch[k] = transform(body[k]);
     };
 
     // simple strings
-    ['companyName','companyType','registrationNumber','tradingName','companyAddress','businessNature',
-     'landline','mobile','email','website','tenure','previousAddress','offeredCompany','offeredTerms',
-     'existingCompany','remainingTerms','alreadyPayingCharges','details','otherCards','accountTitle',
-     'accountNumber','sortCode','iban','bankName','pseudo','agentName','closerName'].forEach(k => copyIf(k, v => v === '' ? null : v));
+    [
+      'companyName','companyType','registrationNumber','tradingName','companyAddress','businessNature',
+      'landline','mobile','email','website','tenure','previousAddress','offeredCompany','offeredTerms',
+      'existingCompany','remainingTerms','alreadyPayingCharges','details','otherCards','accountTitle',
+      'accountNumber','sortCode','iban','bankName','pseudo','agentName','closerName'
+    ].forEach(k => copyIf(k, v => v === '' ? null : v));
 
     // numeric conversions
     copyIf('numberOfDirectors', v => v ? parseInt(v,10) : null);
-    // REMOVED: 'value' from numeric conversions since it doesn't exist in your schema
-    ['totalTurnover','cardTurnover','avgTransaction','minTransaction','maxTransaction','monthlyLineRent',
-     'debitPercentage','creditPercentage','authorizationFee'].forEach(k => copyIf(k, v => v != null ? parseFloat(v) : null));
+    [
+      'totalTurnover','cardTurnover','avgTransaction','minTransaction','maxTransaction',
+      'monthlyLineRent','debitPercentage','creditPercentage','authorizationFee'
+    ].forEach(k => copyIf(k, v => v != null ? parseFloat(v) : null));
 
     // owner fields
     copyIf('directorOwnerName1'); copyIf('position1'); copyIf('nationality1'); copyIf('homeAddress1');
@@ -331,57 +360,76 @@ router.put('/:id', requireAuth, async (req, res) => {
     // status
     if (body.status !== undefined) patch.status = body.status;
 
-    // Enhanced Assignment logic for updates
+    // Enhanced Assignment logic for updates + previousAssignedToIds history
     if (body.assignedToId !== undefined) {
       let assignedToId = body.assignedToId ? parseInt(body.assignedToId, 10) : null;
       
       if (assignedToId) {
-        // Validate target user exists
         const targetUser = await prisma.user.findUnique({ 
           where: { id: assignedToId }, 
           include: { team: true, role: true } 
         });
         
         if (!targetUser) {
-          // Invalid user - disconnect assignment
           patch.assignedTo = { disconnect: true };
         } else {
-          // Check assignment permissions based on role
           if (requesterRole === 'admin') {
-            // Admin can assign to anyone
             patch.assignedTo = { connect: { id: assignedToId } };
           } else if (requesterRole === 'team_lead'||requesterRole === 'Team Lead') {
-            // Team lead can assign to themselves or team members
             const targetTeam = targetUser?.team?.name || null;
             if (targetTeam === requesterTeam) {
               patch.assignedTo = { connect: { id: assignedToId } };
             } else {
-              // Not in same team - assign to requester
               patch.assignedTo = { connect: { id: requester.id } };
+              assignedToId = requester.id;
             }
           } else {
-            // Regular user can only assign to themselves or their team lead
             const targetTeam = targetUser?.team?.name || null;
             const isTargetTeamLead = targetUser?.role?.name === 'team_lead'|| targetUser?.role?.name === 'Team Lead';
             
             if (assignedToId === requester.id || (isTargetTeamLead && targetTeam === requesterTeam)) {
               patch.assignedTo = { connect: { id: assignedToId } };
             } else {
-              // Not allowed - assign to requester
               patch.assignedTo = { connect: { id: requester.id } };
+              assignedToId = requester.id;
             }
+          }
+
+          // 🔹 history: if assignee changed, store old assignee in previousAssignedToIds
+          const oldAssigneeId = existingLead.assignedToId;
+          const prevList = existingLead.previousAssignedToIds || [];
+
+          if (
+            oldAssigneeId &&
+            oldAssigneeId !== assignedToId &&
+            !prevList.includes(oldAssigneeId)
+          ) {
+            patch.previousAssignedToIds = {
+              set: [...prevList, oldAssigneeId],
+            };
           }
         }
       } else {
         // assignedToId is null/empty - assign to requester
         patch.assignedTo = { connect: { id: requester.id } };
+
+        const oldAssigneeId = existingLead.assignedToId;
+        const prevList = existingLead.previousAssignedToIds || [];
+
+        if (
+          oldAssigneeId &&
+          oldAssigneeId !== requester.id &&
+          !prevList.includes(oldAssigneeId)
+        ) {
+          patch.previousAssignedToIds = {
+            set: [...prevList, oldAssigneeId],
+          };
+        }
       }
     }
 
-    // teamName override if provided or use requester's team
     if (body.teamName !== undefined) patch.teamName = body.teamName || null;
 
-    // perform update
     const updated = await prisma.lead.update({
       where: { id },
       data: patch,

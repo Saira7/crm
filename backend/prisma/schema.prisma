@@ -134,7 +134,7 @@ model Lead {
   assignedToId          Int?
   assignedTo            User?            @relation("AssignedLeads", fields: [assignedToId], references: [id])
   teamName              String?
-  
+  previousAssignedToIds Int[]            @default([])
   // Status Comments and Timestamps
   leadComment           String?
   leadCommentDate       DateTime?

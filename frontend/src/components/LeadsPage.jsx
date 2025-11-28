@@ -24,6 +24,7 @@ export default function LeadsPage() {
     ? (typeof user.team === 'string' ? user.team : user.team.name)
     : null;
   const normRole = (userRole || '').toString().toLowerCase();
+  const userId = user?.id;
 
   const TABS = [
     { key: 'lead', label: 'Leads' },
@@ -58,12 +59,18 @@ export default function LeadsPage() {
     await load();
   };
 
-  // Which leads this user can see
+  // Which leads this user can see (current or previously assigned)
   const accessible = useMemo(() => {
-    
-    return leads.filter((l) => l.assignedToId === user.id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leads, normRole, user, userTeam]);
+    if (!userId) return [];
+    return leads.filter((l) => {
+      if (l.assignedToId === userId) return true;
+      const prev = Array.isArray(l.previousAssignedToIds)
+        ? l.previousAssignedToIds
+        : [];
+      return prev.includes(userId);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leads, normRole, userId, userTeam]);
 
   // Filter by tab (status)
   const byStatus = useMemo(
@@ -71,11 +78,28 @@ export default function LeadsPage() {
     [accessible, activeTab]
   );
 
-  // Global search across visible-in-tab leads
-  const filtered = useMemo(() => {
+  // Split into current vs previous
+  const myActive = useMemo(
+    () => byStatus.filter((l) => l.assignedToId === userId),
+    [byStatus, userId]
+  );
+
+  const myPrevious = useMemo(
+    () =>
+      byStatus.filter((l) => {
+        if (l.assignedToId === userId) return false;
+        const prev = Array.isArray(l.previousAssignedToIds)
+          ? l.previousAssignedToIds
+          : [];
+        return prev.includes(userId);
+      }),
+    [byStatus, userId]
+  );
+
+  const searchFilter = (list) => {
     const s = q.trim().toLowerCase();
-    if (!s) return byStatus;
-    return byStatus.filter((l) =>
+    if (!s) return list;
+    return list.filter((l) =>
       [
         l.companyName,
         l.mobile,
@@ -87,9 +111,17 @@ export default function LeadsPage() {
         .filter(Boolean)
         .some((field) => field.toLowerCase().includes(s))
     );
-  }, [byStatus, q]);
+  };
 
-  
+  const filteredActive = useMemo(
+    () => searchFilter(myActive),
+    [myActive, q]
+  );
+  const filteredPrevious = useMemo(
+    () => searchFilter(myPrevious),
+    [myPrevious, q]
+  );
+
   // assignment options for dropdown
   const assignableUsers = useMemo(() => {
     if (!Array.isArray(users) || !user) return [];
@@ -99,21 +131,40 @@ export default function LeadsPage() {
       return users;
     }
 
-    if (normRole === 'team_lead' || normRole === 'team lead' || normRole === 'team-lead') {
+    if (
+      normRole === 'team_lead' ||
+      normRole === 'team lead' ||
+      normRole === 'team-lead'
+    ) {
       // team leads can assign to users in their own team
       return users.filter((u) => {
-        const t = u?.team ? (typeof u.team === 'string' ? u.team : u.team.name) : null;
+        const t = u?.team
+          ? typeof u.team === 'string'
+            ? u.team
+            : u.team.name
+          : null;
         return t && t === userTeam;
       });
     }
 
     // regular agent: can assign to themselves + team lead(s) in same team
     return users.filter((u) => {
-      const t = u?.team ? (typeof u.team === 'string' ? u.team : u.team.name) : null;
-      const r = u?.role ? (typeof u.role === 'string' ? u.role : u.role.name) : null;
+      const t = u?.team
+        ? typeof u.team === 'string'
+          ? u.team
+          : u.team.name
+        : null;
+      const r = u?.role
+        ? typeof u.role === 'string'
+          ? u.role
+          : u.role.name
+        : null;
       const nr = (r || '').toString().toLowerCase();
       if (u.id === user.id) return true;
-      if ((nr === 'team_lead' || nr === 'team lead' || nr === 'team-lead') && t === userTeam) {
+      if (
+        (nr === 'team_lead' || nr === 'team lead' || nr === 'team-lead') &&
+        t === userTeam
+      ) {
         return true;
       }
       return false;
@@ -140,21 +191,20 @@ export default function LeadsPage() {
   };
 
   const handleDelete = async (id) => {
-  const ok = window.confirm('Are you sure you want to delete this record?');
-  if (!ok) return;
+    const ok = window.confirm('Are you sure you want to delete this record?');
+    if (!ok) return;
 
-  try {
-    await apiFetch(`/leads/${id}`, token, {
-      method: 'DELETE',
-    });
-    setLeads((prev) => prev.filter((l) => l.id !== id));
-    if (selected?.id === id) setSelected(null);
-  } catch (err) {
-    console.error('Delete failed', err);
-    alert(err.message || 'Failed to delete');
-  }
-};
-
+    try {
+      await apiFetch(`/leads/${id}`, token, {
+        method: 'DELETE',
+      });
+      setLeads((prev) => prev.filter((l) => l.id !== id));
+      if (selected?.id === id) setSelected(null);
+    } catch (err) {
+      console.error('Delete failed', err);
+      alert(err.message || 'Failed to delete');
+    }
+  };
 
   const handleAssignChange = async (leadId, assignedToIdStr) => {
     const assignedToId = assignedToIdStr ? parseInt(assignedToIdStr, 10) : null;
@@ -181,6 +231,7 @@ export default function LeadsPage() {
   }
 
   const currentTab = TABS.find((t) => t.key === activeTab);
+  const totalFiltered = filteredActive.length + filteredPrevious.length;
 
   return (
     <div className="p-4 lg:p-8 space-y-6">
@@ -191,7 +242,9 @@ export default function LeadsPage() {
             <h1 className="text-2xl font-bold text-gray-900">
               {currentTab?.label || 'Leads'}
             </h1>
-            <p className="text-sm text-gray-500">{filtered.length} records</p>
+            <p className="text-sm text-gray-500">
+              {totalFiltered} records (current + previously assigned)
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -233,8 +286,13 @@ export default function LeadsPage() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Section: Currently Assigned */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+        <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-800">
+            Currently Assigned {currentTab?.label} ({filteredActive.length})
+          </h2>
+        </div>
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs font-semibold text-gray-600">
             <tr>
@@ -246,7 +304,7 @@ export default function LeadsPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((l) => (
+            {filteredActive.map((l) => (
               <tr key={l.id} className="border-t hover:bg-gray-50">
                 <td className="p-3 align-top">
                   <div className="font-medium text-gray-900">{l.companyName}</div>
@@ -254,7 +312,6 @@ export default function LeadsPage() {
                     <div className="text-xs text-gray-500 mt-0.5">{l.email}</div>
                   )}
                 </td>
-
                 <td className="p-3 align-top">
                   <div className="text-gray-800">{l.mobile}</div>
                 </td>
@@ -304,25 +361,139 @@ export default function LeadsPage() {
                         <Eye className="w-3 h-3" />
                         View
                       </button>
-                      
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(l.id)}
-                          className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 text-xs"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                          Delete
-                        </button>
-                      
+
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(l.id)}
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 text-xs"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Delete
+                      </button>
                     </div>
                   </div>
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && (
+            {filteredActive.length === 0 && (
               <tr>
                 <td colSpan={5} className="p-6 text-center text-gray-500">
-                  No records found
+                  No currently assigned records for this status.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Section: Previously Assigned */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+        <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-800">
+            Previously Assigned {currentTab?.label} ({filteredPrevious.length})
+          </h2>
+          <p className="text-xs text-gray-500">
+            Leads you handled earlier but are now with someone else.
+          </p>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs font-semibold text-gray-600">
+            <tr>
+              <th className="p-3 text-left">Company Name</th>
+              <th className="p-3 text-left">Contact</th>
+              <th className="p-3 text-left">Current Owner</th>
+              <th className="p-3 text-left">Comment</th>
+              <th className="p-3 text-left">Due</th>
+              <th className="p-3 text-left">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredPrevious.map((l) => (
+              <tr key={l.id} className="border-t hover:bg-gray-50">
+                <td className="p-3 align-top">
+                  <div className="font-medium text-gray-900">{l.companyName}</div>
+                  {l.email && (
+                    <div className="text-xs text-gray-500 mt-0.5">{l.email}</div>
+                  )}
+                </td>
+                <td className="p-3 align-top">
+                  <div className="text-gray-800">{l.mobile}</div>
+                </td>
+                <td className="p-3 align-top">
+                  {l.assignedToName ? (
+                    <span className="text-gray-800 text-sm">
+                      {l.assignedToName}
+                    </span>
+                  ) : (
+                    <span className="text-red-600 text-sm font-medium">
+                      Unassigned
+                    </span>
+                  )}
+                </td>
+                <td className="p-3 align-top max-w-xs">
+                  <div className="text-gray-700 line-clamp-2">
+                    {getComment(l) || (
+                      <span className="text-gray-400 italic">No comment</span>
+                    )}
+                  </div>
+                </td>
+                <td className="p-3 align-top">
+                  {l.dueDate ? (
+                    <span>{new Date(l.dueDate).toLocaleString()}</span>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
+                </td>
+                <td className="p-3 align-top">
+                  <div className="flex flex-col gap-2 min-w-[230px]">
+                    {/* You can still show assign here (backend will enforce permissions) */}
+                    <select
+                      className="flex-1 px-2 py-1 border rounded-lg text-xs"
+                      value={l.assignedToId || ''}
+                      onChange={(e) => handleAssignChange(l.id, e.target.value)}
+                    >
+                      <option value="">Unassigned</option>
+                      {assignableUsers.map((u) => {
+                        const roleLabel =
+                          typeof u.role === 'string'
+                            ? u.role
+                            : u.role?.name || 'user';
+                        return (
+                          <option key={u.id} value={u.id}>
+                            {u.name} ({roleLabel})
+                          </option>
+                        );
+                      })}
+                    </select>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelected(l)}
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs"
+                      >
+                        <Eye className="w-3 h-3" />
+                        View
+                      </button>
+                      {/* Usually we don't let you delete historical leads you don't own,
+                          but backend will enforce auth anyway. Keep or remove as you like. */}
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(l.id)}
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 text-xs"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {filteredPrevious.length === 0 && (
+              <tr>
+                <td colSpan={6} className="p-6 text-center text-gray-500">
+                  No previously assigned records for this status.
                 </td>
               </tr>
             )}
