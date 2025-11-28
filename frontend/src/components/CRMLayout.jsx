@@ -15,7 +15,7 @@ import {
   Clock,
   NoteSticky,        // 👈 NEW
 } from 'lucide-react';
-import StickyNotesPanel from '../components/StickyNotesPanel'; // 👈 NEW
+import StickyNotesPanel from 'StickyNotesPanel'; 
 
 function NotificationBell({ notifications, onToggle, isOpen }) {
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -383,7 +383,7 @@ export default function CRMLayout() {
               isOpen={bellOpen}
             />
 
-            {/* 👇 Sticky Notes button in the navbar */}
+            
             <button
               type="button"
               onClick={() => setNotesOpen(true)}
