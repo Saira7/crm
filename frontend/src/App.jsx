@@ -26,7 +26,7 @@ export default function App() {
           <Route path="leads" element={<LeadsPage />} />
           <Route path="team" element={<TeamPage />} />
           <Route path="team-overview" element={<TeamLeadOverview />} /> 
-          <Route path="admin" element={<AdminDashboard />} />
+          <Route path="admin-dashboard" element={<AdminDashboard />} />
           <Route path="sticky-notes" element={<StickyNotesPanel />} />
           <Route path="files" element={<FilesPage />} />
         </Route>
