@@ -347,7 +347,7 @@ export default function TeamLeadOverview() {
             <tr>
               <th className="p-3 text-left">Customer Name</th>
               <th className="p-3 text-left">Contact</th>
-              <th className="p-3 text-left">Status</th>
+              {/* <th className="p-3 text-left">Status</th> */}
               <th className="p-3 text-left">Assigned To</th>
               <th className="p-3 text-left">Comment</th>
               <th className="p-3 text-left">Due</th>
@@ -380,9 +380,9 @@ export default function TeamLeadOverview() {
                   <td className="p-3 align-top">
                     <div className="text-gray-800">{l.mobile}</div>
                   </td>
-                  <td className="p-3 align-top capitalize">
+                  {/* <td className="p-3 align-top capitalize">
                     {l.status || <span className="text-gray-400">—</span>}
-                  </td>
+                  </td> */}
                   <td className="p-3 align-top">
                     {assignedUser ? (
                       <>
