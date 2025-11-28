@@ -18,6 +18,7 @@ app.use('/api/teams', requireAuth, checkIPRestriction, teamRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/admin', adminRoutes); 
+app.use('/api/notes', require('./routes/notes'));
 app.get('/', (req, res) => res.json({ ok: true }));
 
 const port = process.env.PORT || 4000;
