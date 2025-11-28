@@ -122,7 +122,7 @@ export default function LeadsPage() {
     [myPrevious, q]
   );
 
-  // assignment options for dropdown
+  // assignment options for dropdown (used only in active section)
   const assignableUsers = useMemo(() => {
     if (!Array.isArray(users) || !user) return [];
 
@@ -386,7 +386,7 @@ export default function LeadsPage() {
         </table>
       </div>
 
-      {/* Section: Previously Assigned */}
+      {/* Section: Previously Assigned (READ-ONLY except View) */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
         <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-800">
@@ -445,48 +445,15 @@ export default function LeadsPage() {
                   )}
                 </td>
                 <td className="p-3 align-top">
-                  <div className="flex flex-col gap-2 min-w-[230px]">
-                    {/* You can still show assign here (backend will enforce permissions) */}
-                    <select
-                      className="flex-1 px-2 py-1 border rounded-lg text-xs"
-                      value={l.assignedToId || ''}
-                      onChange={(e) => handleAssignChange(l.id, e.target.value)}
-                    >
-                      <option value="">Unassigned</option>
-                      {assignableUsers.map((u) => {
-                        const roleLabel =
-                          typeof u.role === 'string'
-                            ? u.role
-                            : u.role?.name || 'user';
-                        return (
-                          <option key={u.id} value={u.id}>
-                            {u.name} ({roleLabel})
-                          </option>
-                        );
-                      })}
-                    </select>
-
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelected(l)}
-                        className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs"
-                      >
-                        <Eye className="w-3 h-3" />
-                        View
-                      </button>
-                      {/* Usually we don't let you delete historical leads you don't own,
-                          but backend will enforce auth anyway. Keep or remove as you like. */}
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(l.id)}
-                        className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 text-xs"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        Delete
-                      </button>
-                    </div>
-                  </div>
+                  {/* READ-ONLY: only allow viewing */}
+                  <button
+                    type="button"
+                    onClick={() => setSelected(l)}
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs"
+                  >
+                    <Eye className="w-3 h-3" />
+                    View
+                  </button>
                 </td>
               </tr>
             ))}
