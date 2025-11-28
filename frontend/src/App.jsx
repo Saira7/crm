@@ -7,6 +7,7 @@ import Dashboard from './components/Dashboard';
 import LeadsPage from './components/LeadsPage';
 import TeamPage from './components/TeamPage';
 import TeamLeadOverview from './components/TeamLeadOverview'; 
+import StickyNotesPanel from './components/StickyNotes';
 
 export default function App() {
   const { token } = useContext(AuthContext);
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="leads" element={<LeadsPage />} />
           <Route path="team" element={<TeamPage />} />
           <Route path="team-overview" element={<TeamLeadOverview />} /> 
+          <Route path="sticky-notes" element={<StickyNotesPanel />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

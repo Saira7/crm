@@ -157,3 +157,18 @@ model Lead {
   @@index([status])
   @@index([dueDate])
 }
+model StickyNote {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+
+  title     String?   // optional short title
+  content   String    // main note text
+  color     String?   // e.g. "yellow", "blue", hex, etc.
+  pinned    Boolean   @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+}
