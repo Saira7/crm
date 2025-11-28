@@ -15,7 +15,7 @@ import {
   Clock,
   NoteSticky,        // 👈 NEW
 } from 'lucide-react';
-import StickyNotesPanel from 'StickyNotesPanel'; 
+import StickyNotesPanel from './StickyNotesPanel'; 
 
 function NotificationBell({ notifications, onToggle, isOpen }) {
   const unreadCount = notifications.filter((n) => !n.read).length;
