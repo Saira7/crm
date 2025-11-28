@@ -7,8 +7,9 @@ const userRoutes = require('./routes/users');
 const teamRoutes = require('./routes/teams');
 const roleRoutes = require('./routes/roles');
 const leadRoutes = require('./routes/leads');
-const adminRoutes = require('./routes/admin');
+const adminRoutes = require('./routes/ad');
 const filesRouter = require('./routes/files');
+
 const { checkIPRestriction } = require('./middleware/ipRestriction');
 const app = express();
 app.use(cors());
@@ -22,6 +23,7 @@ app.use('/api/auth', authRoutes);
 app.use('/admin', adminRoutes); 
 app.use('/api/notes', require('./routes/notes'));
 app.use('/api/files', filesRouter);
+app.use('/api/admin', adminRoutes);
 
 app.use(
   '/uploads',
