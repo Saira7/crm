@@ -15,7 +15,8 @@ import {
   Clock,
   FileText,   
   File,      
-  Folders
+  Folders,
+  BarChart3
 } from 'lucide-react';
 import StickyNotesPanel from '../components/StickyNotes';
 
@@ -198,9 +199,20 @@ export default function CRMLayout() {
       clearInterval(interval);
     };
   }, [user, token, userRole]);
-
+  const normRole = (userRole || '').toString().toLowerCase();
+  const isAdmin = normRole === 'admin';
   const navItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    ...(isAdmin
+      ? [
+          {
+            path: '/admin-dashboard',
+            icon: BarChart3,
+            label: 'Admin Dashboard',
+          },
+          { path: '/team', icon: UsersRound, label: 'Team' },
+          { path: '/team-overview', icon: Folders, label: 'Team Overview' },
+        ]
+      : [ { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/leads', icon: FileText, label: 'Leads' },
     ...(userRole === 'admin' ||
     userRole === 'team_lead' ||
@@ -210,7 +222,8 @@ export default function CRMLayout() {
           { path: '/team-overview', icon: Folders, label: 'Team Overview' },
         ]
       : []),
-      { path: '/files', icon: File, label: 'Files' },
+      { path: '/files', icon: File, label: 'Files' },]),
+   
   ];
 
   return (

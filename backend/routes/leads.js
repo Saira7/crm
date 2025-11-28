@@ -455,5 +455,163 @@ router.delete('/:id', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete lead' });
   }
 });
+// GET /api/leads/analytics  (admin-only)
+router.get('/analytics', requireAuth, async (req, res) => {
+  try {
+    const reqUser = await loadRequestingUser(req.user?.userId);
+    const roleName = reqUser?.role?.name || (req.user?.role || 'user');
+    const normRole = roleName.toString().toLowerCase();
+
+    // Only admin can see global analytics
+    if (normRole !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const now = new Date();
+
+    // Helpers for time ranges (in server local time)
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const startOfWeek = new Date(startOfDay);
+    const day = startOfWeek.getDay(); // 0 = Sun
+    const diffToMonday = (day + 6) % 7; // makes Monday the start
+    startOfWeek.setDate(startOfWeek.getDate() - diffToMonday);
+
+    const startOfMonth = new Date(startOfDay.getFullYear(), startOfDay.getMonth(), 1);
+
+    // Main aggregates
+    const [
+      totalLeads,
+      statusGroups,
+      teamGroups,
+      userGroups,
+      todayTotal,
+      weekTotal,
+      monthTotal,
+      todaySales,
+      weekSales,
+      monthSales,
+    ] = await Promise.all([
+      prisma.lead.count(),
+      prisma.lead.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+      }),
+      prisma.lead.groupBy({
+        by: ['teamName'],
+        _count: { _all: true },
+      }),
+      prisma.lead.groupBy({
+        by: ['assignedToId'],
+        _count: { _all: true },
+      }),
+
+      prisma.lead.count({
+        where: { createdAt: { gte: startOfDay } },
+      }),
+      prisma.lead.count({
+        where: { createdAt: { gte: startOfWeek } },
+      }),
+      prisma.lead.count({
+        where: { createdAt: { gte: startOfMonth } },
+      }),
+
+      prisma.lead.count({
+        where: { createdAt: { gte: startOfDay }, status: 'sale' },
+      }),
+      prisma.lead.count({
+        where: { createdAt: { gte: startOfWeek }, status: 'sale' },
+      }),
+      prisma.lead.count({
+        where: { createdAt: { gte: startOfMonth }, status: 'sale' },
+      }),
+    ]);
+
+    // By status
+    const byStatus = {};
+    statusGroups.forEach((row) => {
+      const key = row.status || 'unknown';
+      byStatus[key] = row._count._all;
+    });
+
+    // By team
+    const byTeam = teamGroups
+      .map((row) => ({
+        teamName: row.teamName || 'Unassigned',
+        count: row._count._all,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    // By user (top agents)
+    const userIds = userGroups
+      .map((r) => r.assignedToId)
+      .filter((id) => id != null);
+
+    let users = [];
+    if (userIds.length > 0) {
+      users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: {
+          id: true,
+          name: true,
+          team: { select: { name: true } },
+        },
+      });
+    }
+
+    const userMap = new Map();
+    users.forEach((u) => userMap.set(u.id, u));
+
+    const byUser = userGroups
+      .filter((row) => row.assignedToId != null)
+      .map((row) => {
+        const u = userMap.get(row.assignedToId) || {};
+        return {
+          userId: row.assignedToId,
+          userName: u.name || `User #${row.assignedToId}`,
+          teamName: u.team?.name || 'No team',
+          count: row._count._all,
+        };
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10); // top 10
+
+    const totals = {
+      totalLeads,
+      totalSales: byStatus.sale || 0,
+      totalCallbacks: byStatus.callback || 0,
+      totalTransfers: byStatus.transfer || 0,
+    };
+
+    const timeBuckets = {
+      today: {
+        total: todayTotal,
+        sales: todaySales,
+      },
+      thisWeek: {
+        total: weekTotal,
+        sales: weekSales,
+      },
+      thisMonth: {
+        total: monthTotal,
+        sales: monthSales,
+      },
+    };
+
+    res.json({
+      totals,
+      byStatus,
+      byTeam,
+      byUser,
+      timeBuckets,
+      generatedAt: now.toISOString(),
+    });
+  } catch (err) {
+    console.error('GET /api/leads/analytics error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 module.exports = router;

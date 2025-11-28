@@ -9,6 +9,7 @@ import TeamPage from './components/TeamPage';
 import TeamLeadOverview from './components/TeamLeadOverview'; 
 import StickyNotesPanel from './components/StickyNotes';
 import FilesPage from './components/FileAttachment';
+import AdminDashboard from './components/AdminDashboard';
 export default function App() {
   const { token } = useContext(AuthContext);
 
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="leads" element={<LeadsPage />} />
           <Route path="team" element={<TeamPage />} />
           <Route path="team-overview" element={<TeamLeadOverview />} /> 
+          <Route path="admin" element={<AdminDashboard />} />
           <Route path="sticky-notes" element={<StickyNotesPanel />} />
           <Route path="files" element={<FilesPage />} />
         </Route>
