@@ -17,11 +17,13 @@ export default function TeamLeadOverview() {
   const { token, user } = useContext(AuthContext);
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [activeTab, setActiveTab] = useState('lead');
   const [selected, setSelected] = useState(null);
   const [q, setQ] = useState('');
+  const [selectedTeam, setSelectedTeam] = useState('all'); // admin team filter
 
   const userRole = user?.role
     ? (typeof user.role === 'string' ? user.role : user.role.name)
@@ -38,12 +40,14 @@ export default function TeamLeadOverview() {
     (async () => {
       setLoading(true);
       try {
-        const [leadsData, usersData] = await Promise.all([
+        const [leadsData, usersData, teamsData] = await Promise.all([
           apiFetch('/leads', token),
           apiFetch('/users', token),
+          apiFetch('/teams', token),
         ]);
         setLeads(leadsData || []);
         setUsers(usersData || []);
+        setTeams(teamsData || []);
       } catch (err) {
         console.error('Failed to load team overview data', err);
       } finally {
@@ -59,22 +63,6 @@ export default function TeamLeadOverview() {
     normRole === 'team lead' ||
     normRole === 'team-lead';
 
-  // Build team member list (same team, not the TL themself)
-  const teamMembers = useMemo(() => {
-    if (!userTeamId) return [];
-    return users.filter(
-      (u) =>
-        u.id !== user.id &&
-        (u.teamId === userTeamId ||
-          (u.team && (u.team.id === userTeamId || u.team.name === userTeam)))
-    );
-  }, [users, user.id, userTeam, userTeamId]);
-
-  const teamMemberIds = useMemo(
-    () => new Set(teamMembers.map((u) => u.id)),
-    [teamMembers]
-  );
-
   const userMap = useMemo(() => {
     const m = new Map();
     users.forEach((u) => m.set(u.id, u));
@@ -84,19 +72,55 @@ export default function TeamLeadOverview() {
   const getComment = (lead) =>
     lead.leadComment || lead.callbackComment || lead.saleComment || '';
 
-  // Leads assigned to teammates (NOT the TL themself)
-  const teammateLeads = useMemo(
-    () =>
-      leads.filter(
-        (l) =>
-          l.assignedToId &&
-          l.assignedToId !== user.id &&
-          teamMemberIds.has(l.assignedToId)
-      ),
-    [leads, teamMemberIds, user.id]
+  // Helper: determine effective team name for a lead
+  const getLeadTeamName = (lead) => {
+    if (lead.teamName) return lead.teamName;
+    if (lead.assignedToId) {
+      const u = userMap.get(lead.assignedToId);
+      if (!u) return null;
+      const t = u.team
+        ? (typeof u.team === 'string' ? u.team : u.team.name)
+        : null;
+      return t || null;
+    }
+    return null;
+  };
+
+  // Team members for the summary box
+  const teamMembers = useMemo(() => {
+    // Team Lead: only their own team
+    if (normRole !== 'admin') {
+      if (!userTeamId) return [];
+      return users.filter(
+        (u) =>
+          u.id !== user.id &&
+          (u.teamId === userTeamId ||
+            (u.team && (u.team.id === userTeamId || u.team.name === userTeam)))
+      );
+    }
+
+    // Admin:
+    if (selectedTeam === 'all') {
+      // show everyone except self
+      return users.filter((u) => u.id !== user.id);
+    }
+
+    // Admin + specific team selected
+    return users.filter((u) => {
+      if (u.id === user.id) return false;
+      const t = u.team
+        ? (typeof u.team === 'string' ? u.team : u.team.name)
+        : null;
+      return t === selectedTeam;
+    });
+  }, [users, user.id, userTeam, userTeamId, normRole, selectedTeam]);
+
+  const teamMemberIds = useMemo(
+    () => new Set(teamMembers.map((u) => u.id)),
+    [teamMembers]
   );
 
-  // Unassigned leads that belong to this team (or all, for admin)
+  // Unassigned leads (for admin: all; for TL: only their team)
   const unassignedLeads = useMemo(
     () =>
       leads.filter((l) => {
@@ -107,7 +131,7 @@ export default function TeamLeadOverview() {
     [leads, normRole, userTeam]
   );
 
-  // Combine & filter by active tab + search
+  // Combine & filter by active tab + search + (for admin) selected team
   const rows = useMemo(() => {
     let base = [];
 
@@ -117,15 +141,25 @@ export default function TeamLeadOverview() {
       // Only teammate-assigned + unassigned in this status
       base = leads.filter((l) => {
         if (l.status !== activeTab) return false;
+
+        // For TL: teammate assigned = in same team (based on teamMemberIds)
+        // For admin: we still use teamMemberIds (members of selected team or all)
         const isTeammateAssigned =
           l.assignedToId &&
           l.assignedToId !== user.id &&
           teamMemberIds.has(l.assignedToId);
+
         const isUnassigned =
           !l.assignedToId &&
           (normRole === 'admin' || l.teamName === userTeam);
+
         return isTeammateAssigned || isUnassigned;
       });
+    }
+
+    // Admin: apply team filter if selectedTeam != 'all'
+    if (normRole === 'admin' && selectedTeam !== 'all') {
+      base = base.filter((l) => getLeadTeamName(l) === selectedTeam);
     }
 
     const s = q.trim().toLowerCase();
@@ -143,7 +177,18 @@ export default function TeamLeadOverview() {
         .filter(Boolean)
         .some((field) => field.toLowerCase().includes(s))
     );
-  }, [activeTab, leads, unassignedLeads, teamMemberIds, user.id, normRole, userTeam, q]);
+  }, [
+    activeTab,
+    leads,
+    unassignedLeads,
+    teamMemberIds,
+    user.id,
+    normRole,
+    userTeam,
+    q,
+    selectedTeam,
+    userMap,
+  ]);
 
   if (!canView) {
     return (
@@ -170,6 +215,34 @@ export default function TeamLeadOverview() {
 
   const currentTab = TABS.find((t) => t.key === activeTab);
 
+  // Label for summary title
+  const summaryLabel =
+    normRole === 'admin'
+      ? selectedTeam === 'all'
+        ? 'all teams'
+        : selectedTeam
+      : userTeam || 'your team';
+
+  // Helper: count leads for a member, respecting admin team filter
+  const getLeadCountForMember = (memberId) => {
+    return leads.filter((l) => {
+      if (l.assignedToId !== memberId) return false;
+
+      if (normRole === 'admin' && selectedTeam !== 'all') {
+        return getLeadTeamName(l) === selectedTeam;
+      }
+
+      // TL or admin with "all"
+      if (normRole !== 'admin') {
+        // For TL, make sure it's same team
+        const lt = getLeadTeamName(l);
+        return !lt || lt === userTeam;
+      }
+
+      return true;
+    }).length;
+  };
+
   return (
     <div className="p-4 lg:p-8 space-y-6">
       {/* Header */}
@@ -180,11 +253,28 @@ export default function TeamLeadOverview() {
               Team Overview – {currentTab?.label}
             </h1>
             <p className="text-sm text-gray-500">
-              Showing items assigned to your team members and unassigned items
-              for your team.
+              {normRole === 'admin'
+                ? 'Showing items across all teams, filter by team below if needed.'
+                : 'Showing items assigned to your team members and unassigned items for your team.'}
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Admin-only team filter */}
+            {normRole === 'admin' && (
+              <select
+                value={selectedTeam}
+                onChange={(e) => setSelectedTeam(e.target.value)}
+                className="px-3 py-2 border rounded-lg text-sm bg-white"
+              >
+                <option value="all">All Teams</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <div className="relative">
               <input
                 value={q}
@@ -220,20 +310,18 @@ export default function TeamLeadOverview() {
       {/* Team members summary */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <h2 className="text-sm font-semibold text-gray-800 mb-2">
-          Team members in {userTeam || 'your team'}
+          Team members in {summaryLabel}
         </h2>
         {teamMembers.length === 0 ? (
           <p className="text-sm text-gray-500">
-            No other team members found in your team.
+            No team members found for this view.
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {teamMembers.map((m) => {
               const roleLabel =
                 typeof m.role === 'string' ? m.role : m.role?.name || 'user';
-              const countForMember = teammateLeads.filter(
-                (l) => l.assignedToId === m.id
-              ).length;
+              const countForMember = getLeadCountForMember(m.id);
 
               return (
                 <div
@@ -268,7 +356,9 @@ export default function TeamLeadOverview() {
           </thead>
           <tbody>
             {rows.map((l) => {
-              const assignedUser = l.assignedToId ? userMap.get(l.assignedToId) : null;
+              const assignedUser = l.assignedToId
+                ? userMap.get(l.assignedToId)
+                : null;
               const assignedRole = assignedUser
                 ? (typeof assignedUser.role === 'string'
                     ? assignedUser.role
@@ -278,9 +368,13 @@ export default function TeamLeadOverview() {
               return (
                 <tr key={l.id} className="border-t hover:bg-gray-50">
                   <td className="p-3 align-top">
-                    <div className="font-medium text-gray-900">{l.companyName}</div>
+                    <div className="font-medium text-gray-900">
+                      {l.companyName}
+                    </div>
                     {l.email && (
-                      <div className="text-xs text-gray-500 mt-0.5">{l.email}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {l.email}
+                      </div>
                     )}
                   </td>
                   <td className="p-3 align-top">
@@ -295,7 +389,9 @@ export default function TeamLeadOverview() {
                         <div className="text-gray-900 text-sm font-medium">
                           {assignedUser.name}
                         </div>
-                        <div className="text-xs text-gray-500">{assignedRole}</div>
+                        <div className="text-xs text-gray-500">
+                          {assignedRole}
+                        </div>
                       </>
                     ) : (
                       <span className="text-red-600 text-sm font-medium">
@@ -353,7 +449,6 @@ export default function TeamLeadOverview() {
           onClose={() => setSelected(null)}
           onRefresh={() => {
             setSelected(null);
-            // re-fetch to keep in sync
             if (token) {
               apiFetch('/leads', token)
                 .then((data) => setLeads(data || []))
