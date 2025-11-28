@@ -14,7 +14,7 @@ import {
   AlertCircle,
   Clock,
 } from 'lucide-react';
-
+import StickyNotesPanel from './StickyNotes';
 function NotificationBell({ notifications, onToggle, isOpen }) {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -206,7 +206,7 @@ export default function CRMLayout() {
         { path: '/team-overview', icon: UsersRound, label: 'Team Overview' }, 
       ]
     : []),
-  { path: '/sticky-notes', icon: Clock, label: 'Sticky Notes' }, 
+  //{ path: '/sticky-notes', icon: Clock, label: 'Sticky Notes' }, 
 ];
 
 
@@ -386,6 +386,7 @@ export default function CRMLayout() {
             <Outlet />
           </div>
         </main>
+        <StickyNotesPanel />
       </div>
     </div>
   );
