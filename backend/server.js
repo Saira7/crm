@@ -7,6 +7,7 @@ const teamRoutes = require('./routes/teams');
 const roleRoutes = require('./routes/roles');
 const leadRoutes = require('./routes/leads');
 const adminRoutes = require('./routes/admin');
+const filesRouter = require('./routes/files');
 const { checkIPRestriction } = require('./middleware/ipRestriction');
 const app = express();
 app.use(cors());
@@ -19,6 +20,12 @@ app.use('/api/roles', roleRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/admin', adminRoutes); 
 app.use('/api/notes', require('./routes/notes'));
+app.use('/api/files', filesRouter);
+
+app.use(
+  '/uploads',
+  express.static(path.join(__dirname, 'uploads'))
+);
 app.get('/', (req, res) => res.json({ ok: true }));
 
 const port = process.env.PORT || 4000;

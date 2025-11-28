@@ -13,6 +13,9 @@ import {
   Bell,
   AlertCircle,
   Clock,
+  FileText,   
+  File,      
+  Folders
 } from 'lucide-react';
 import StickyNotesPanel from '../components/StickyNotes';
 
@@ -198,15 +201,16 @@ export default function CRMLayout() {
 
   const navItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/leads', icon: Users, label: 'Leads' },
+    { path: '/leads', icon: FileText, label: 'Leads' },
     ...(userRole === 'admin' ||
     userRole === 'team_lead' ||
     userRole === 'Team Lead'
       ? [
           { path: '/team', icon: UsersRound, label: 'Team' },
-          { path: '/team-overview', icon: UsersRound, label: 'Team Overview' },
+          { path: '/team-overview', icon: Folders, label: 'Team Overview' },
         ]
       : []),
+      { path: '/files', icon: File, label: 'Files' },
   ];
 
   return (
