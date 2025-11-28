@@ -401,10 +401,9 @@ export default function LeadsPage() {
             <tr>
               <th className="p-3 text-left">Company Name</th>
               <th className="p-3 text-left">Contact</th>
-              <th className="p-3 text-left">Current Owner</th>
+              <th className="p-3 text-left">Currently Assigned</th>
               <th className="p-3 text-left">Comment</th>
               <th className="p-3 text-left">Due</th>
-              <th className="p-3 text-left">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -444,17 +443,7 @@ export default function LeadsPage() {
                     <span className="text-gray-400">—</span>
                   )}
                 </td>
-                <td className="p-3 align-top">
-                  {/* READ-ONLY: only allow viewing */}
-                  <button
-                    type="button"
-                    onClick={() => setSelected(l)}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs"
-                  >
-                    <Eye className="w-3 h-3" />
-                    View
-                  </button>
-                </td>
+                
               </tr>
             ))}
             {filteredPrevious.length === 0 && (
