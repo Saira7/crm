@@ -1,4 +1,3 @@
-// src/components/FilesPage.jsx
 import React, { useContext, useEffect, useState } from 'react';
 import { AuthContext } from './AuthContext';
 import { apiFetch } from '../api';
@@ -44,12 +43,72 @@ export default function FilesPage() {
     const file = e.target.files?.[0] || null;
     setSelectedFile(file);
   };
-  const handleView = (id) => {
-  if (!token) return;
-  // open view endpoint in a new tab
-  window.open(`/api/files/${id}/view`, '_blank');
-};
 
+  // VIEW via blob (with Authorization header)
+  const handleView = async (file) => {
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/files/${file.id}/view`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        console.error('Failed to fetch file for view', res.status);
+        alert('Failed to open file');
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      window.open(url, '_blank');
+
+      // free memory later
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      console.error('Error opening file', err);
+      alert('Error opening file');
+    }
+  };
+
+  // DOWNLOAD via blob (with Authorization header)
+  const handleDownload = async (file) => {
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/files/${file.id}/download`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        console.error('Failed to fetch file for download', res.status);
+        alert('Failed to download file');
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.originalName || 'download';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error downloading file', err);
+      alert('Error downloading file');
+    }
+  };
 
   const handleUpload = async () => {
     if (!selectedFile || !token) return;
@@ -100,12 +159,6 @@ export default function FilesPage() {
       console.error('Delete failed', err);
       alert(err.message || 'Failed to delete');
     }
-  };
-
-  const handleDownload = (id) => {
-    if (!token) return;
-    // just open new window/tab to download endpoint
-    window.open(`/api/files/${id}/download`, '_blank');
   };
 
   return (
@@ -194,15 +247,14 @@ export default function FilesPage() {
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                 <button
-  type="button"
-  onClick={() => handleView(file.id)}
-  className="font-medium text-sm text-blue-600 hover:underline text-left truncate"
-  title="Click to view"
->
-  {file.originalName}
-</button>
-
+                  <button
+                    type="button"
+                    onClick={() => handleView(file)}
+                    className="font-medium text-sm text-blue-600 hover:underline text-left truncate"
+                    title="Click to view"
+                  >
+                    {file.originalName}
+                  </button>
                 </div>
                 {file.description && (
                   <p className="text-xs text-gray-500 truncate">
@@ -220,7 +272,7 @@ export default function FilesPage() {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleDownload(file.id)}
+                  onClick={() => handleDownload(file)}
                   className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-700 hover:bg-gray-50"
                 >
                   <Download className="w-3 h-3" />
