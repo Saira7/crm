@@ -44,6 +44,12 @@ export default function FilesPage() {
     const file = e.target.files?.[0] || null;
     setSelectedFile(file);
   };
+  const handleView = (id) => {
+  if (!token) return;
+  // open view endpoint in a new tab
+  window.open(`/api/files/${id}/view`, '_blank');
+};
+
 
   const handleUpload = async () => {
     if (!selectedFile || !token) return;
@@ -188,9 +194,15 @@ export default function FilesPage() {
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm text-gray-900 truncate">
-                    {file.originalName}
-                  </span>
+                 <button
+  type="button"
+  onClick={() => handleView(file.id)}
+  className="font-medium text-sm text-blue-600 hover:underline text-left truncate"
+  title="Click to view"
+>
+  {file.originalName}
+</button>
+
                 </div>
                 {file.description && (
                   <p className="text-xs text-gray-500 truncate">
