@@ -49,7 +49,7 @@ model User {
 
   leads          Lead[]       @relation("AssignedLeads")
   stickyNotes    StickyNote[] 
-
+  attachments    FileAttachment[]
   @@index([email])
   @@index([roleId])
   @@index([teamId])
@@ -172,6 +172,22 @@ model StickyNote {
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+}
+model FileAttachment {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id])
+
+  originalName String   // filename as uploaded
+  storedName   String   // filename on disk
+  mimeType     String
+  size         Int      // in bytes
+  description  String?  // optional user note
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([userId])
 }
