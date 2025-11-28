@@ -176,5 +176,49 @@ router.delete('/:id', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+// GET /api/files/:id/view  -> inline view (browser tries to display it)
+router.get('/:id/view', requireAuth, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: 'Invalid file id' });
+    }
+
+    const userId = req.user?.userId;
+    const isAdmin =
+      (req.user?.role && String(req.user.role).toLowerCase() === 'admin') ||
+      (req.user?.role?.name &&
+        String(req.user.role.name).toLowerCase() === 'admin');
+
+    const fileRecord = await prisma.fileAttachment.findUnique({
+      where: { id },
+    });
+
+    if (!fileRecord) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    if (!isAdmin && fileRecord.userId !== userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const filePath = path.join(UPLOAD_DIR, fileRecord.storedName);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Physical file missing' });
+    }
+
+    // Let browser decide how to show it (PDF/image opens in tab, etc.)
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${encodeURIComponent(fileRecord.originalName)}"`
+    );
+    res.setHeader('Content-Type', fileRecord.mimeType || 'application/octet-stream');
+
+    fs.createReadStream(filePath).pipe(res);
+  } catch (err) {
+    console.error('GET /api/files/:id/view error', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 module.exports = router;
