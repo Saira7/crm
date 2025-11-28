@@ -408,7 +408,7 @@ export default function CRMLayout() {
           </main>
 
           {/* Always-visible sticky notes on far right */}
-          if (userRole != 'admin' || userRole === 'team_lead' || userRole === 'Team Lead' || userRole === 'user')
+          {/* if (userRole != 'admin' || userRole === 'team_lead' || userRole === 'Team Lead' || userRole === 'user') */}
         <div className="w-80 border-l border-gray-200 bg-white flex-shrink-0">
 
           <StickyNotesPanel />
