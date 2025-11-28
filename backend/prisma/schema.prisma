@@ -30,28 +30,31 @@ model Team {
 }
 
 model User {
-  id             Int      @id @default(autoincrement())
+  id             Int          @id @default(autoincrement())
   name           String
-  email          String  @unique   
+  email          String       @unique   
   password       String
   roleId         Int
-  role           Role     @relation(fields: [roleId], references: [id])
+  role           Role         @relation(fields: [roleId], references: [id])
   teamId         Int?
-  team           Team?    @relation(fields: [teamId], references: [id])
-  description    String?  // optional description on user
-  allowedIPs     String[] @default([])
-  ipRestricted   Boolean  @default(true)
-  ipExempt       Boolean  @default(false)
+  team           Team?        @relation(fields: [teamId], references: [id])
+  description    String?      // optional description on user
+  allowedIPs     String[]     @default([])
+  ipRestricted   Boolean      @default(true)
+  ipExempt       Boolean      @default(false)
   lastLoginIP    String?
   lastLoginAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  leads          Lead[]   @relation("AssignedLeads")
-  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  leads          Lead[]       @relation("AssignedLeads")
+  stickyNotes    StickyNote[] 
+
   @@index([email])
   @@index([roleId])
   @@index([teamId])
 }
+
 
 model IPRestriction {
   id          Int      @id @default(autoincrement())
