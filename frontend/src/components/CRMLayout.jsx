@@ -203,9 +203,10 @@ export default function CRMLayout() {
   ...(userRole === 'admin' || userRole === 'team_lead' || userRole === 'Team Lead'
     ? [
         { path: '/team', icon: UsersRound, label: 'Team' },
-        { path: '/team-overview', icon: UsersRound, label: 'Team Overview' }, // ⬅ new
+        { path: '/team-overview', icon: UsersRound, label: 'Team Overview' }, 
       ]
     : []),
+  { path: '/sticky-notes', icon: Clock, label: 'Sticky Notes' }, 
 ];
 
 
