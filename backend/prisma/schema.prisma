@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,7 +10,7 @@ datasource db {
 model Role {
   id              Int              @id @default(autoincrement())
   name            String           @unique
-  description     String?          // optional description
+  description     String?
   ipRestricted    Boolean          @default(true)
   allowedIPs      String[]         @default(["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"])
   users           User[]
@@ -21,40 +20,54 @@ model Role {
 }
 
 model Team {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  description String?  // optional description
+  id          Int                  @id @default(autoincrement())
+  name        String               @unique
+  description String?
   members     User[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  leads       TeamLeadAssignment[] // 👈 teams can have many leads
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+}
+
+model TeamLeadAssignment {
+  id     Int   @id @default(autoincrement())
+  userId Int
+  teamId Int
+
+  user   User  @relation(fields: [userId], references: [id])
+  team   Team  @relation(fields: [teamId], references: [id])
+
+  @@unique([userId, teamId])
+  @@index([teamId])
 }
 
 model User {
-  id             Int          @id @default(autoincrement())
+  id             Int                  @id @default(autoincrement())
   name           String
-  email          String       @unique   
+  email          String               @unique
   password       String
   roleId         Int
-  role           Role         @relation(fields: [roleId], references: [id])
+  role           Role                 @relation(fields: [roleId], references: [id])
   teamId         Int?
-  team           Team?        @relation(fields: [teamId], references: [id])
-  description    String?      // optional description on user
-  allowedIPs     String[]     @default([])
-  ipRestricted   Boolean      @default(true)
-  ipExempt       Boolean      @default(false)
+  team           Team?                @relation(fields: [teamId], references: [id])
+  description    String?
+  allowedIPs     String[]             @default([])
+  ipRestricted   Boolean              @default(true)
+  ipExempt       Boolean              @default(false)
   lastLoginIP    String?
   lastLoginAt    DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 
-  leads          Lead[]       @relation("AssignedLeads")
-  stickyNotes    StickyNote[] 
+  leads          Lead[]               @relation("AssignedLeads")
+  stickyNotes    StickyNote[]
   attachments    FileAttachment[]
+  leadTeams      TeamLeadAssignment[] // 👈 teams this user leads
+
   @@index([email])
   @@index([roleId])
   @@index([teamId])
 }
-
 
 model IPRestriction {
   id          Int      @id @default(autoincrement())
@@ -80,7 +93,7 @@ model Lead {
   
   // Company Details (Required)
   companyName           String
-  companyType           String?          // Ltd & Partnership / Sole Trader / Charity
+  companyType           String?
   registrationNumber    String?
   tradingName           String?
   numberOfDirectors     Int?
@@ -104,7 +117,7 @@ model Lead {
   nationality2          String?
   homeAddress2          String?
   
-  tenure                String?          // Years living at address
+  tenure                String?
   previousAddress       String?
   
   // Payment Processing Details
@@ -133,11 +146,12 @@ model Lead {
   bankName              String?
   
   // Lead Management
-  status                String           @default("lead")  // lead, callback, sale
+  status                String           @default("lead")
   assignedToId          Int?
   assignedTo            User?            @relation("AssignedLeads", fields: [assignedToId], references: [id])
   teamName              String?
   previousAssignedToIds Int[]            @default([])
+  
   // Status Comments and Timestamps
   leadComment           String?
   leadCommentDate       DateTime?
@@ -152,7 +166,7 @@ model Lead {
   
   // System Fields
   createdAt             DateTime         @default(now())
-  updatedAt             DateTime @updatedAt
+  updatedAt             DateTime         @updatedAt
   tags                  String[]         @default([])
   
   @@index([assignedToId])
@@ -160,31 +174,33 @@ model Lead {
   @@index([status])
   @@index([dueDate])
 }
+
 model StickyNote {
   id        Int      @id @default(autoincrement())
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
 
-  title     String?   // optional short title
-  content   String    // main note text
-  color     String?   // e.g. "yellow", "blue", hex, etc.
-  pinned    Boolean   @default(false)
+  title     String?
+  content   String
+  color     String?
+  pinned    Boolean  @default(false)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
 }
+
 model FileAttachment {
   id           Int      @id @default(autoincrement())
   userId       Int
   user         User     @relation(fields: [userId], references: [id])
 
-  originalName String   // filename as uploaded
-  storedName   String   // filename on disk
+  originalName String
+  storedName   String
   mimeType     String
-  size         Int      // in bytes
-  description  String?  // optional user note
+  size         Int
+  description  String?
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
