@@ -174,13 +174,10 @@ export default function LeadDetailModal({
       ? (typeof u.role === 'string' ? u.role : u.role.name)
       : null;
 
- const assignableUsers = useMemo(() => {
+const assignableUsers = useMemo(() => {
   if (!Array.isArray(users)) return [];
 
-  const normRole =
-    (userRole || '').toString().toLowerCase();
-
-  const myTeamName = userTeam; // you've already computed userTeam above
+  const myTeamName = userTeam; // you already computed this above
 
   const getUserTeamName = (u) =>
     u?.team
@@ -192,27 +189,10 @@ export default function LeadDetailModal({
       ? (typeof u.role === 'string' ? u.role : u.role.name)
       : null;
 
-  const userLeadsTeams = Array.isArray(user?.leadTeams)
-    ? user.leadTeams
-        .map((lt) =>
-          lt.team
-            ? (typeof lt.team === 'string' ? lt.team : lt.team.name)
-            : null
-        )
-        .filter(Boolean)
-    : [];
-
-  const allowedTeamNames = Array.from(
-    new Set([myTeamName, ...userLeadsTeams].filter(Boolean))
-  );
-
-  console.log('[LeadDetailModal] current user.leadTeams =', user?.leadTeams);
-  console.log('[LeadDetailModal] allowedTeamNames =', allowedTeamNames);
-
   // Admin → everyone
   if (normRole === 'admin') return users;
 
-  // Team Lead → all members of ANY team they lead
+  // Team Lead → anyone whose team is in ANY team they lead (same as before)
   if (
     normRole === 'team_lead' ||
     normRole === 'team lead' ||
@@ -225,7 +205,9 @@ export default function LeadDetailModal({
     });
   }
 
-  // Regular user → themselves OR TLs that LEAD their primary team via junction
+  // Regular user → themselves OR TLs that are:
+  //  - primary TL for their team, OR
+  //  - lead their team via leadTeams
   if (!myTeamName) return [user].filter(Boolean);
 
   return users.filter((u) => {
@@ -238,8 +220,9 @@ export default function LeadDetailModal({
 
     if (!isTL) return false;
 
-    // does this user lead my team (via leadTeams)?
-    const leadsMyTeam = Array.isArray(u.leadTeams)
+    const primaryTeamOfTL = getUserTeamName(u);
+
+    const leadsMyTeamViaJunction = Array.isArray(u.leadTeams)
       ? u.leadTeams.some((lt) => {
           if (!lt.team) return false;
           const tName =
@@ -250,9 +233,10 @@ export default function LeadDetailModal({
         })
       : false;
 
-    return leadsMyTeam;
+    return primaryTeamOfTL === myTeamName || leadsMyTeamViaJunction;
   });
-}, [users, userRole, user, userTeam]);
+}, [users, normRole, allowedTeamNames, user.id, userTeam]);
+
 
 
 
