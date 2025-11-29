@@ -1,3 +1,4 @@
+// backend/routes/files.js
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -16,9 +17,7 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 
 // configure multer
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, UPLOAD_DIR);
-  },
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
     const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname || '');
@@ -29,46 +28,51 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 /**
- * Helper: normalize role & get user's teamId from DB
+ * Helper: role + team lead context
  */
-async function getRoleAndTeam(req) {
-  const userId = req.user?.userId;
+async function getRoleContext(req) {
+  const userId = req.user?.userId || null;
+
   let rawRole = null;
-
-  // role might be string or object with name
   if (req.user?.role) {
-    if (typeof req.user.role === 'string') {
-      rawRole = req.user.role;
-    } else if (req.user.role.name) {
-      rawRole = req.user.role.name;
-    }
+    if (typeof req.user.role === 'string') rawRole = req.user.role;
+    else if (req.user.role.name) rawRole = req.user.role.name;
   }
-
   const role = rawRole ? String(rawRole).toLowerCase() : 'user';
-
-  // fetch user to get teamId (in case it's not in token)
-  let teamId = null;
-  if (userId) {
-    const dbUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { teamId: true },
-    });
-    teamId = dbUser?.teamId ?? null;
-  }
-
   const isAdmin = role === 'admin';
   const isTeamLead = role === 'team_lead' || role === 'team lead';
 
-  return { userId, role, isAdmin, isTeamLead, teamId };
+  let teamId = null;
+  let leadTeamIds = [];
+
+  if (userId) {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        teamId: true,
+        leadTeams: {
+          select: { teamId: true },
+        },
+      },
+    });
+
+    teamId = dbUser?.teamId ?? null;
+    leadTeamIds = (dbUser?.leadTeams || []).map((lt) => lt.teamId);
+
+    // Optional: if TL has no explicit leadTeams, fallback to their own team
+    if (isTeamLead && leadTeamIds.length === 0 && teamId) {
+      leadTeamIds = [teamId];
+    }
+  }
+
+  return { userId, role, isAdmin, isTeamLead, teamId, leadTeamIds };
 }
 
 // GET /api/files
-// Admin: all files
-// Team Lead: files of users in their team
-// Normal user: only their own files
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const { userId, isAdmin, isTeamLead, teamId } = await getRoleAndTeam(req);
+    const { userId, isAdmin, isTeamLead, leadTeamIds } =
+      await getRoleContext(req);
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -77,15 +81,15 @@ router.get('/', requireAuth, async (req, res) => {
     let where = {};
 
     if (isAdmin) {
-      // all files
       where = {};
-    } else if (isTeamLead && teamId) {
-      // files of users in the same team
+    } else if (isTeamLead && leadTeamIds.length > 0) {
+      // files where owner is in any of the TL's teams
       where = {
-        user: { teamId },
+        user: {
+          teamId: { in: leadTeamIds },
+        },
       };
     } else {
-      // only own files
       where = { userId };
     }
 
@@ -111,8 +115,7 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/files  (multipart/form-data)
-// fields: file (binary), description (text, optional)
+// POST /api/files
 router.post(
   '/',
   requireAuth,
@@ -121,10 +124,7 @@ router.post(
     try {
       const userId = req.user?.userId;
       if (!userId) {
-        // clean up uploaded file if no user
-        if (req.file) {
-          fs.unlink(req.file.path, () => {});
-        }
+        if (req.file) fs.unlink(req.file.path, () => {});
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
@@ -154,7 +154,22 @@ router.post(
   }
 );
 
-// GET /api/files/:id/download  -> stream file
+// helper: permission check
+async function canAccessFile(fileRecord, ctx) {
+  const { userId, isAdmin, isTeamLead, leadTeamIds } = ctx;
+  if (!userId) return false;
+  if (isAdmin) return true;
+  if (!fileRecord) return false;
+
+  const sameOwner = fileRecord.userId === userId;
+  const ownerTeamId = fileRecord.user?.teamId ?? null;
+  const sameLeadTeam =
+    isTeamLead && ownerTeamId && leadTeamIds.includes(ownerTeamId);
+
+  return sameOwner || sameLeadTeam;
+}
+
+// GET /api/files/:id/download
 router.get('/:id/download', requireAuth, async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -162,10 +177,7 @@ router.get('/:id/download', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid file id' });
     }
 
-    const { userId, isAdmin, isTeamLead, teamId } = await getRoleAndTeam(req);
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    const ctx = await getRoleContext(req);
 
     const fileRecord = await prisma.fileAttachment.findUnique({
       where: { id },
@@ -178,11 +190,8 @@ router.get('/:id/download', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    const sameOwner = fileRecord.userId === userId;
-    const sameTeam =
-      isTeamLead && !!teamId && fileRecord.user && fileRecord.user.teamId === teamId;
-
-    if (!isAdmin && !sameOwner && !sameTeam) {
+    const allowed = await canAccessFile(fileRecord, ctx);
+    if (!allowed) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -215,10 +224,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid file id' });
     }
 
-    const { userId, isAdmin, isTeamLead, teamId } = await getRoleAndTeam(req);
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    const ctx = await getRoleContext(req);
 
     const fileRecord = await prisma.fileAttachment.findUnique({
       where: { id },
@@ -231,18 +237,13 @@ router.delete('/:id', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    const sameOwner = fileRecord.userId === userId;
-    const sameTeam =
-      isTeamLead && !!teamId && fileRecord.user && fileRecord.user.teamId === teamId;
-
-    if (!isAdmin && !sameOwner && !sameTeam) {
+    const allowed = await canAccessFile(fileRecord, ctx);
+    if (!allowed) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    // delete db record
     await prisma.fileAttachment.delete({ where: { id } });
 
-    // delete physical file
     const filePath = path.join(UPLOAD_DIR, fileRecord.storedName);
     if (fs.existsSync(filePath)) {
       fs.unlink(filePath, () => {});
@@ -255,7 +256,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/files/:id/view  -> inline view (browser tries to display it)
+// GET /api/files/:id/view
 router.get('/:id/view', requireAuth, async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -263,10 +264,7 @@ router.get('/:id/view', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Invalid file id' });
     }
 
-    const { userId, isAdmin, isTeamLead, teamId } = await getRoleAndTeam(req);
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    const ctx = await getRoleContext(req);
 
     const fileRecord = await prisma.fileAttachment.findUnique({
       where: { id },
@@ -279,11 +277,8 @@ router.get('/:id/view', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    const sameOwner = fileRecord.userId === userId;
-    const sameTeam =
-      isTeamLead && !!teamId && fileRecord.user && fileRecord.user.teamId === teamId;
-
-    if (!isAdmin && !sameOwner && !sameTeam) {
+    const allowed = await canAccessFile(fileRecord, ctx);
+    if (!allowed) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -292,7 +287,6 @@ router.get('/:id/view', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Physical file missing' });
     }
 
-    // Let browser decide how to show it (PDF/image opens in tab, etc.)
     res.setHeader(
       'Content-Disposition',
       `inline; filename="${encodeURIComponent(fileRecord.originalName)}"`

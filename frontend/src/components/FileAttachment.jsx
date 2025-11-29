@@ -1,3 +1,4 @@
+// src/pages/FilesPage.jsx
 import React, { useContext, useEffect, useState } from 'react';
 import { AuthContext } from './AuthContext';
 import { apiFetch } from '../api';
@@ -21,7 +22,6 @@ export default function FilesPage() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [description, setDescription] = useState('');
 
-  // ----- Role helpers -----
   const userRoleRaw = user?.role
     ? typeof user.role === 'string'
       ? user.role
@@ -41,7 +41,7 @@ export default function FilesPage() {
   const headingSubtitle = isAdmin
     ? 'View and manage all file attachments in the system.'
     : isTeamLead
-    ? 'View and manage file attachments for your team.'
+    ? 'View and manage file attachments for your team(s).'
     : 'Upload and manage your own files (any type).';
 
   const listTitle = headingTitle;
@@ -69,7 +69,6 @@ export default function FilesPage() {
     setSelectedFile(file);
   };
 
-  // VIEW via blob (with Authorization header)
   const handleView = async (file) => {
     if (!token) return;
 
@@ -91,8 +90,6 @@ export default function FilesPage() {
       const url = URL.createObjectURL(blob);
 
       window.open(url, '_blank');
-
-      // free memory later
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       console.error('Error opening file', err);
@@ -100,7 +97,6 @@ export default function FilesPage() {
     }
   };
 
-  // DOWNLOAD via blob (with Authorization header)
   const handleDownload = async (file) => {
     if (!token) return;
 
@@ -163,7 +159,6 @@ export default function FilesPage() {
       setFiles((prev) => [created, ...prev]);
       setSelectedFile(null);
       setDescription('');
-      // clear input
       const input = document.getElementById('file-input');
       if (input) input.value = '';
     } catch (err) {
@@ -192,9 +187,7 @@ export default function FilesPage() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{headingTitle}</h1>
-          <p className="text-sm text-gray-500">
-            {headingSubtitle}
-          </p>
+          <p className="text-sm text-gray-500">{headingSubtitle}</p>
         </div>
       </div>
 
@@ -291,12 +284,13 @@ export default function FilesPage() {
                   </p>
                 )}
 
-                {/* Owner / Team info for admin & team lead */}
                 {(isAdmin || isTeamLead) && file.user && (
                   <p className="text-[11px] text-gray-500 mt-0.5 truncate">
                     Owner: {file.user.name || 'Unknown'}
                     {file.user.email ? ` • ${file.user.email}` : ''}
-                    {file.user.team?.name ? ` • Team: ${file.user.team.name}` : ''}
+                    {file.user.team?.name
+                      ? ` • Team: ${file.user.team.name}`
+                      : ''}
                   </p>
                 )}
 

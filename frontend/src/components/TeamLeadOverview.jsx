@@ -23,17 +23,26 @@ export default function TeamLeadOverview() {
   const [activeTab, setActiveTab] = useState('lead');
   const [selected, setSelected] = useState(null);
   const [q, setQ] = useState('');
-  const [selectedTeam, setSelectedTeam] = useState('all'); // admin team filter
+  const [selectedTeam, setSelectedTeam] = useState('all');
 
   const userRole = user?.role
-    ? (typeof user.role === 'string' ? user.role : user.role.name)
+    ? typeof user.role === 'string'
+      ? user.role
+      : user.role.name
     : null;
   const normRole = (userRole || '').toString().toLowerCase();
 
   const userTeam = user?.team
-    ? (typeof user.team === 'string' ? user.team : user.team.name)
+    ? typeof user.team === 'string'
+      ? user.team
+      : user.team.name
     : null;
   const userTeamId = user?.teamId || user?.team?.id || null;
+
+  const isTeamLeadRole =
+    normRole === 'team_lead' ||
+    normRole === 'team lead' ||
+    normRole === 'team-lead';
 
   useEffect(() => {
     if (!token) return;
@@ -56,7 +65,6 @@ export default function TeamLeadOverview() {
     })();
   }, [token]);
 
-  // Only admins & team leads should be here
   const canView =
     normRole === 'admin' ||
     normRole === 'team_lead' ||
@@ -72,78 +80,112 @@ export default function TeamLeadOverview() {
   const getComment = (lead) =>
     lead.leadComment || lead.callbackComment || lead.saleComment || '';
 
-  // Helper: determine effective team name for a lead
   const getLeadTeamName = (lead) => {
     if (lead.teamName) return lead.teamName;
     if (lead.assignedToId) {
       const u = userMap.get(lead.assignedToId);
       if (!u) return null;
       const t = u.team
-        ? (typeof u.team === 'string' ? u.team : u.team.name)
+        ? typeof u.team === 'string'
+          ? u.team
+          : u.team.name
         : null;
       return t || null;
     }
     return null;
   };
 
-  // Team members for the summary box
+  // teams this user leads (from /teams.leads)
+  const leadTeamIds = useMemo(() => {
+    if (!isTeamLeadRole) return [];
+    return teams
+      .filter((t) =>
+        (t.leads || []).some((lt) => lt.userId === user.id)
+      )
+      .map((t) => t.id);
+  }, [teams, isTeamLeadRole, user?.id]);
+
+  const leadTeamNames = useMemo(
+    () =>
+      teams
+        .filter((t) => leadTeamIds.includes(t.id))
+        .map((t) => t.name),
+    [teams, leadTeamIds]
+  );
+
   const teamMembers = useMemo(() => {
-    // Team Lead: only their own team
-    if (normRole !== 'admin') {
-      if (!userTeamId) return [];
-      return users.filter(
-        (u) =>
-          u.id !== user.id &&
-          (u.teamId === userTeamId ||
-            (u.team && (u.team.id === userTeamId || u.team.name === userTeam)))
-      );
+    if (normRole === 'admin') {
+      if (selectedTeam === 'all') {
+        return users.filter((u) => u.id !== user.id);
+      }
+      return users.filter((u) => {
+        if (u.id === user.id) return false;
+        const t = u.team
+          ? typeof u.team === 'string'
+            ? u.team
+            : u.team.name
+          : null;
+        return t === selectedTeam;
+      });
     }
 
-    // Admin:
-    if (selectedTeam === 'all') {
-      // show everyone except self
-      return users.filter((u) => u.id !== user.id);
+    if (isTeamLeadRole) {
+      if (!leadTeamIds.length) return [];
+      return users.filter((u) => {
+        if (u.id === user.id) return false;
+        const tid = u.teamId || (u.team && u.team.id) || null;
+        return tid && leadTeamIds.includes(tid);
+      });
     }
 
-    // Admin + specific team selected
-    return users.filter((u) => {
-      if (u.id === user.id) return false;
-      const t = u.team
-        ? (typeof u.team === 'string' ? u.team : u.team.name)
-        : null;
-      return t === selectedTeam;
-    });
-  }, [users, user.id, userTeam, userTeamId, normRole, selectedTeam]);
+    if (!userTeamId) return [];
+    return users.filter(
+      (u) =>
+        u.id !== user.id &&
+        (u.teamId === userTeamId ||
+          (u.team && (u.team.id === userTeamId || u.team.name === userTeam)))
+    );
+  }, [
+    users,
+    user.id,
+    normRole,
+    selectedTeam,
+    userTeam,
+    userTeamId,
+    isTeamLeadRole,
+    leadTeamIds,
+  ]);
 
   const teamMemberIds = useMemo(
     () => new Set(teamMembers.map((u) => u.id)),
     [teamMembers]
   );
 
-  // Unassigned leads (for admin: all; for TL: only their team)
   const unassignedLeads = useMemo(
     () =>
       leads.filter((l) => {
         if (l.assignedToId) return false;
         if (normRole === 'admin') return true;
+
+        if (isTeamLeadRole) {
+          if (!leadTeamNames.length) return false;
+          return l.teamName && leadTeamNames.includes(l.teamName);
+        }
+
         return l.teamName === userTeam;
       }),
-    [leads, normRole, userTeam]
+    [leads, normRole, userTeam, isTeamLeadRole, leadTeamNames]
   );
 
-  // Combine & filter by active tab + search + (for admin) selected team
   const rows = useMemo(() => {
     let base = [];
 
     if (activeTab === 'unassigned') {
       base = unassignedLeads;
     } else {
-      // Only teammate-assigned + unassigned in this status
       base = leads.filter((l) => {
         if (l.status !== activeTab) return false;
 
-        // For TL: teammate assigned = in same team (based on teamMemberIds)
-        // For admin: we still use teamMemberIds (members of selected team or all)
         const isTeammateAssigned =
           l.assignedToId &&
           l.assignedToId !== user.id &&
@@ -151,13 +193,18 @@ export default function TeamLeadOverview() {
 
         const isUnassigned =
           !l.assignedToId &&
-          (normRole === 'admin' || l.teamName === userTeam);
+          (normRole === 'admin'
+            ? true
+            : isTeamLeadRole
+            ? leadTeamNames.length > 0 &&
+              l.teamName &&
+              leadTeamNames.includes(l.teamName)
+            : l.teamName === userTeam);
 
         return isTeammateAssigned || isUnassigned;
       });
     }
 
-    // Admin: apply team filter if selectedTeam != 'all'
     if (normRole === 'admin' && selectedTeam !== 'all') {
       base = base.filter((l) => getLeadTeamName(l) === selectedTeam);
     }
@@ -188,6 +235,8 @@ export default function TeamLeadOverview() {
     q,
     selectedTeam,
     userMap,
+    isTeamLeadRole,
+    leadTeamNames,
   ]);
 
   if (!canView) {
@@ -215,15 +264,15 @@ export default function TeamLeadOverview() {
 
   const currentTab = TABS.find((t) => t.key === activeTab);
 
-  // Label for summary title
   const summaryLabel =
     normRole === 'admin'
       ? selectedTeam === 'all'
         ? 'all teams'
         : selectedTeam
+      : isTeamLeadRole && leadTeamNames.length > 1
+      ? 'your teams'
       : userTeam || 'your team';
 
-  // Helper: count leads for a member, respecting admin team filter
   const getLeadCountForMember = (memberId) => {
     return leads.filter((l) => {
       if (l.assignedToId !== memberId) return false;
@@ -232,10 +281,12 @@ export default function TeamLeadOverview() {
         return getLeadTeamName(l) === selectedTeam;
       }
 
-      // TL or admin with "all"
       if (normRole !== 'admin') {
-        // For TL, make sure it's same team
         const lt = getLeadTeamName(l);
+        if (isTeamLeadRole) {
+          if (!leadTeamNames.length) return false;
+          return lt && leadTeamNames.includes(lt);
+        }
         return !lt || lt === userTeam;
       }
 
@@ -255,11 +306,10 @@ export default function TeamLeadOverview() {
             <p className="text-sm text-gray-500">
               {normRole === 'admin'
                 ? 'Showing items across all teams, filter by team below if needed.'
-                : 'Showing items assigned to your team members and unassigned items for your team.'}
+                : 'Showing items assigned to your team members and unassigned items for your teams.'}
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Admin-only team filter */}
             {normRole === 'admin' && (
               <select
                 value={selectedTeam}
@@ -347,7 +397,6 @@ export default function TeamLeadOverview() {
             <tr>
               <th className="p-3 text-left">Customer Name</th>
               <th className="p-3 text-left">Contact</th>
-              {/* <th className="p-3 text-left">Status</th> */}
               <th className="p-3 text-left">Assigned To</th>
               <th className="p-3 text-left">Comment</th>
               <th className="p-3 text-left">Due</th>
@@ -380,9 +429,6 @@ export default function TeamLeadOverview() {
                   <td className="p-3 align-top">
                     <div className="text-gray-800">{l.mobile}</div>
                   </td>
-                  {/* <td className="p-3 align-top capitalize">
-                    {l.status || <span className="text-gray-400">—</span>}
-                  </td> */}
                   <td className="p-3 align-top">
                     {assignedUser ? (
                       <>
@@ -402,7 +448,9 @@ export default function TeamLeadOverview() {
                   <td className="p-3 align-top max-w-xs">
                     <div className="text-gray-700 line-clamp-2">
                       {getComment(l) || (
-                        <span className="text-gray-400 italic">No comment</span>
+                        <span className="text-gray-400 italic">
+                          No comment
+                        </span>
                       )}
                     </div>
                   </td>
