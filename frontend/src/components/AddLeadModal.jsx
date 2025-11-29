@@ -82,17 +82,20 @@ export default function AddLeadModal({
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-    const availableAssignees = useMemo(() => {
+   const availableAssignees = useMemo(() => {
     if (!Array.isArray(users)) return [];
 
-    const normalizedRoleRaw =
-      typeof userRole === 'string' ? userRole : String(userRole || '');
-    const normalizedRole = normalizedRoleRaw.toLowerCase();
+    const normalizedRole =
+      (typeof userRole === 'string' ? userRole : String(userRole || ''))
+        .toLowerCase();
 
+    // primary team of the logged-in user
     const primaryTeam =
-      typeof user?.team === 'string' ? user.team : user?.team?.name;
+      user?.team
+        ? (typeof user.team === 'string' ? user.team : user.team.name)
+        : null;
 
-    // collect all teams this user leads
+    // all teams this user leads via junction table
     const leadTeamNames = Array.isArray(user?.leadTeams)
       ? user.leadTeams
           .map((lt) =>
@@ -103,6 +106,7 @@ export default function AddLeadModal({
           .filter(Boolean)
       : [];
 
+    // union = primary team + all led teams
     const allowedTeamNames = Array.from(
       new Set([primaryTeam, ...leadTeamNames].filter(Boolean))
     );
@@ -112,8 +116,15 @@ export default function AddLeadModal({
         ? (typeof u.team === 'string' ? u.team : u.team.name)
         : null;
 
+    // 🔎 debug
+    console.log('[AddLeadModal] user.leadTeams =', user?.leadTeams);
+    console.log('[AddLeadModal] allowedTeamNames =', allowedTeamNames);
+
     // Admin → everyone
-    if (normalizedRole === 'admin') return users;
+    if (normalizedRole === 'admin') {
+      console.log('[AddLeadModal] availableAssignees (admin) =', users);
+      return users;
+    }
 
     // Team lead → all members of ANY team they lead
     if (
@@ -121,16 +132,25 @@ export default function AddLeadModal({
       normalizedRole === 'team lead' ||
       normalizedRole === 'team-lead'
     ) {
-      if (!allowedTeamNames.length) return [];
-      return users.filter((u) => {
+      if (!allowedTeamNames.length) {
+        console.log('[AddLeadModal] TL but no allowedTeamNames');
+        return [];
+      }
+
+      const list = users.filter((u) => {
         const tName = getUserTeamName(u);
         return tName && allowedTeamNames.includes(tName);
       });
+
+      console.log('[AddLeadModal] availableAssignees (team lead) =', list);
+      return list;
     }
 
-    // Regular users: you decided they cannot freely assign, so keep [] (backend will default to self)
+    // Regular users → cannot assign (backend defaults to self)
+    console.log('[AddLeadModal] non-assigner role, availableAssignees = []');
     return [];
   }, [users, userRole, user]);
+
 
 
   const validateMinimum = () => {
