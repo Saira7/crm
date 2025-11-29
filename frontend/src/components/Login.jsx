@@ -3,9 +3,10 @@ import React, { useState, useContext } from 'react';
 import { AuthContext } from './AuthContext';
 import { apiFetch } from '../api';
 import { Lock, Mail, LogIn } from 'lucide-react';
-
+import { useNavigate } from 'react-router-dom';
 export default function Login() {
   const { setToken, setUser } = useContext(AuthContext);
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,6 +24,17 @@ export default function Login() {
       });
       setToken(data.token);
       setUser(data.user);
+      const rawRole =
+        typeof data.user.role === 'string'
+          ? data.user.role
+          : data.user.role?.name ?? 'user';
+
+      const normRole = rawRole.toLowerCase();
+        if (normRole === 'admin') {
+        navigate('/admin-dashboard', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
     } catch (err) {
       setError(err.message || 'Login failed');
     } finally {
