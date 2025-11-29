@@ -122,52 +122,89 @@ export default function LeadsPage() {
     [myPrevious, q]
   );
 
-  // assignment options for dropdown (used only in active section)
+    // assignment options for dropdown (used only in active section)
   const assignableUsers = useMemo(() => {
     if (!Array.isArray(users) || !user) return [];
 
+    const getUserTeamName = (u) =>
+      u?.team
+        ? (typeof u.team === 'string' ? u.team : u.team.name)
+        : null;
+
+    const getUserRoleName = (u) =>
+      u?.role
+        ? (typeof u.role === 'string' ? u.role : u.role.name)
+        : null;
+
+    const myTeamName = userTeam;
+
+    // teams THIS user leads (from junction table)
+    const leadTeamNames = Array.isArray(user?.leadTeams)
+      ? user.leadTeams
+          .map((lt) =>
+            lt.team
+              ? (typeof lt.team === 'string' ? lt.team : lt.team.name)
+              : null
+          )
+          .filter(Boolean)
+      : [];
+
+    // union of primary team + all led teams
+    const allowedTeamNames = Array.from(
+      new Set([myTeamName, ...leadTeamNames].filter(Boolean))
+    );
+
+    // Admin / Manager → can assign to any user
     if (normRole === 'admin' || normRole === 'manager') {
-      // can assign to any user
       return users;
     }
 
+    // Team Lead → can assign to users in ANY team they lead
     if (
       normRole === 'team_lead' ||
       normRole === 'team lead' ||
       normRole === 'team-lead'
     ) {
-      // team leads can assign to users in their own team
+      if (!allowedTeamNames.length) return [];
       return users.filter((u) => {
-        const t = u?.team
-          ? typeof u.team === 'string'
-            ? u.team
-            : u.team.name
-          : null;
-        return t && t === userTeam;
+        const t = getUserTeamName(u);
+        return t && allowedTeamNames.includes(t);
       });
     }
 
-    // regular agent: can assign to themselves + team lead(s) in same team
+    // Regular agent:
+    //  - can assign to themselves
+    //  - can assign to team leads that:
+    //      * have primaryTeam === myTeamName
+    //      * OR lead myTeamName via leadTeams
+    if (!myTeamName) return [user].filter(Boolean);
+
     return users.filter((u) => {
-      const t = u?.team
-        ? typeof u.team === 'string'
-          ? u.team
-          : u.team.name
-        : null;
-      const r = u?.role
-        ? typeof u.role === 'string'
-          ? u.role
-          : u.role.name
-        : null;
-      const nr = (r || '').toString().toLowerCase();
+      // always allow self
       if (u.id === user.id) return true;
-      if (
-        (nr === 'team_lead' || nr === 'team lead' || nr === 'team-lead') &&
-        t === userTeam
-      ) {
-        return true;
-      }
-      return false;
+
+      const roleName = (getUserRoleName(u) || '').toLowerCase();
+      const isTL =
+        roleName === 'team_lead' ||
+        roleName === 'team lead' ||
+        roleName === 'team-lead';
+
+      if (!isTL) return false;
+
+      const primaryTeamOfTL = getUserTeamName(u);
+
+      const leadsMyTeamViaJunction = Array.isArray(u.leadTeams)
+        ? u.leadTeams.some((lt) => {
+            if (!lt.team) return false;
+            const tName =
+              typeof lt.team === 'string'
+                ? lt.team
+                : lt.team.name;
+            return tName === myTeamName;
+          })
+        : false;
+
+      return primaryTeamOfTL === myTeamName || leadsMyTeamViaJunction;
     });
   }, [users, user, normRole, userTeam]);
 
