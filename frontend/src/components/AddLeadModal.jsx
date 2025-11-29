@@ -82,74 +82,102 @@ export default function AddLeadModal({
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-   const availableAssignees = useMemo(() => {
-    if (!Array.isArray(users)) return [];
+  const availableAssignees = useMemo(() => {
+  if (!Array.isArray(users)) return [];
 
-    const normalizedRole =
-      (typeof userRole === 'string' ? userRole : String(userRole || ''))
-        .toLowerCase();
+  const normalizedRole =
+    (typeof userRole === 'string' ? userRole : String(userRole || ''))
+      .toLowerCase();
 
-    // primary team of the logged-in user
-    const primaryTeam =
-      user?.team
-        ? (typeof user.team === 'string' ? user.team : user.team.name)
-        : null;
+  // primary team of the logged-in user (agent or TL)
+  const myTeamName =
+    user?.team
+      ? (typeof user.team === 'string' ? user.team : user.team.name)
+      : null;
 
-    // all teams this user leads via junction table
-    const leadTeamNames = Array.isArray(user?.leadTeams)
-      ? user.leadTeams
-          .map((lt) =>
-            lt.team
-              ? (typeof lt.team === 'string' ? lt.team : lt.team.name)
-              : null
-          )
-          .filter(Boolean)
-      : [];
+  const getUserTeamName = (u) =>
+    u?.team
+      ? (typeof u.team === 'string' ? u.team : u.team.name)
+      : null;
 
-    // union = primary team + all led teams
-    const allowedTeamNames = Array.from(
-      new Set([primaryTeam, ...leadTeamNames].filter(Boolean))
-    );
+  const getUserRoleName = (u) =>
+    u?.role
+      ? (typeof u.role === 'string' ? u.role : u.role.name)
+      : null;
 
-    const getUserTeamName = (u) =>
-      u?.team
-        ? (typeof u.team === 'string' ? u.team : u.team.name)
-        : null;
+  const userLeadsTeams = Array.isArray(user?.leadTeams)
+    ? user.leadTeams
+        .map((lt) =>
+          lt.team
+            ? (typeof lt.team === 'string' ? lt.team : lt.team.name)
+            : null
+        )
+        .filter(Boolean)
+    : [];
 
-    // 🔎 debug
-    console.log('[AddLeadModal] user.leadTeams =', user?.leadTeams);
-    console.log('[AddLeadModal] allowedTeamNames =', allowedTeamNames);
+  const allowedTeamNames = Array.from(
+    new Set([myTeamName, ...userLeadsTeams].filter(Boolean))
+  );
 
-    // Admin → everyone
-    if (normalizedRole === 'admin') {
-      console.log('[AddLeadModal] availableAssignees (admin) =', users);
-      return users;
-    }
+  // 🔎 debug
+  console.log('[AddLeadModal] current user.leadTeams =', user?.leadTeams);
+  console.log('[AddLeadModal] allowedTeamNames =', allowedTeamNames);
 
-    // Team lead → all members of ANY team they lead
-    if (
-      normalizedRole === 'team_lead' ||
-      normalizedRole === 'team lead' ||
-      normalizedRole === 'team-lead'
-    ) {
-      if (!allowedTeamNames.length) {
-        console.log('[AddLeadModal] TL but no allowedTeamNames');
-        return [];
-      }
+  // Admin → can assign to everyone
+  if (normalizedRole === 'admin') {
+    console.log('[AddLeadModal] availableAssignees (admin) =', users);
+    return users;
+  }
 
-      const list = users.filter((u) => {
-        const tName = getUserTeamName(u);
-        return tName && allowedTeamNames.includes(tName);
-      });
+  // Team lead → can assign to all members of ANY team they lead
+  if (
+    normalizedRole === 'team_lead' ||
+    normalizedRole === 'team lead' ||
+    normalizedRole === 'team-lead'
+  ) {
+    if (!allowedTeamNames.length) return [];
+    const list = users.filter((u) => {
+      const tName = getUserTeamName(u);
+      return tName && allowedTeamNames.includes(tName);
+    });
+    console.log('[AddLeadModal] availableAssignees (team lead) =', list);
+    return list;
+  }
 
-      console.log('[AddLeadModal] availableAssignees (team lead) =', list);
-      return list;
-    }
+  // Regular agent:
+  //  - can assign to themselves
+  //  - can assign to any Team Lead that LEADS their team via junction table
+  if (!myTeamName) return [user].filter(Boolean);
 
-    // Regular users → cannot assign (backend defaults to self)
-    console.log('[AddLeadModal] non-assigner role, availableAssignees = []');
-    return [];
-  }, [users, userRole, user]);
+  const list = users.filter((u) => {
+    // always allow self
+    if (u.id === user.id) return true;
+
+    const rName = (getUserRoleName(u) || '').toLowerCase();
+    const isTL =
+      rName === 'team_lead' || rName === 'team lead' || rName === 'team-lead';
+
+    if (!isTL) return false;
+
+    // 🔑 does this user lead MY team via leadTeams?
+    const leadsMyTeam = Array.isArray(u.leadTeams)
+      ? u.leadTeams.some((lt) => {
+          if (!lt.team) return false;
+          const tName =
+            typeof lt.team === 'string'
+              ? lt.team
+              : lt.team.name;
+          return tName === myTeamName;
+        })
+      : false;
+
+    return leadsMyTeam;
+  });
+
+  console.log('[AddLeadModal] availableAssignees (agent) =', list);
+  return list;
+}, [users, userRole, user]);
+
 
 
 

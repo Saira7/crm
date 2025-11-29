@@ -21,10 +21,19 @@ function normalizeRole(role) {
  * Returns all users with role & team included.
  * Access: any authenticated user (frontend filters per-role).
  */
+// GET /api/users
 router.get('/', requireAuth, async (req, res) => {
   try {
     const users = await prisma.user.findMany({
-      include: { role: true, team: true },
+      include: { 
+        role: true, 
+        team: true,
+        leadTeams: {
+          include: {
+            team: true,
+          },
+        },
+      },
       orderBy: { id: 'asc' },
     });
 
@@ -36,6 +45,7 @@ router.get('/', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 /**
  * POST /api/users
