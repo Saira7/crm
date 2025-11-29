@@ -5,18 +5,15 @@ import { AuthContext } from './AuthContext';
 import { apiFetch } from '../api';
 import {
   LayoutDashboard,
-  Users,
   UsersRound,
   LogOut,
-  Menu,
-  X,
   Bell,
   AlertCircle,
   Clock,
-  FileText,   
-  File,      
+  FileText,
+  File,
   Folders,
-  BarChart3
+  BarChart3,
 } from 'lucide-react';
 import StickyNotesPanel from '../components/StickyNotes';
 
@@ -77,15 +74,14 @@ function NotificationBell({ notifications, onToggle, isOpen }) {
 
 export default function CRMLayout() {
   const { user, token, setToken, setUser } = useContext(AuthContext);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [bellOpen, setBellOpen] = useState(false);
   const navigate = useNavigate();
 
   const userRole = user?.role
-    ? (typeof user.role === 'string'
-        ? user.role
-        : user.role?.name ?? String(user.role))
+    ? typeof user.role === 'string'
+      ? user.role
+      : user.role?.name ?? String(user.role)
     : 'user';
 
   const handleLogout = () => {
@@ -112,7 +108,8 @@ export default function CRMLayout() {
           const leadTeam = lead.teamName || null;
           const userTeam =
             typeof user?.team === 'string' ? user.team : user?.team?.name;
-          if (userRole === 'team_lead' && leadTeam && userTeam)
+          const normRole = (userRole || '').toString().toLowerCase();
+          if (normRole === 'team_lead' && leadTeam && userTeam)
             return leadTeam === userTeam;
           return false;
         });
@@ -199,38 +196,47 @@ export default function CRMLayout() {
       clearInterval(interval);
     };
   }, [user, token, userRole]);
+
   const normRole = (userRole || '').toString().toLowerCase();
   const isAdmin = normRole === 'admin';
-  const navItems = [
-    ...(isAdmin
-      ? [
-          {
-            path: '/admin-dashboard',
-            icon: BarChart3,
-            label: 'Admin Dashboard',
-          },
-          { path: '/team', icon: UsersRound, label: 'Team' },
-          { path: '/team-overview', icon: Folders, label: 'Team Overview' },
-        ]
-      : [ { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/leads', icon: FileText, label: 'Leads' },
-    ...(userRole === 'admin' ||
-    userRole === 'team_lead' ||
-    userRole === 'Team Lead'
-      ? [
-          { path: '/team', icon: UsersRound, label: 'Team' },
-          { path: '/team-overview', icon: Folders, label: 'Team Overview' },
-        ]
-      : []),
-      { path: '/files', icon: File, label: 'Files' },]),
-   
-  ];
+
+  // Build nav items (shared for desktop + mobile)
+  const navItems = [];
+  if (isAdmin) {
+    navItems.push(
+      { path: '/admin-dashboard', icon: BarChart3, label: 'Admin Dashboard' },
+      { path: '/team', icon: UsersRound, label: 'Team' },
+      { path: '/team-overview', icon: Folders, label: 'Team Overview' },
+      { path: '/files', icon: File, label: 'Files' }
+    );
+  } else {
+    navItems.push(
+      { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+      { path: '/leads', icon: FileText, label: 'Leads' }
+    );
+
+    const isLeadRole =
+      userRole === 'admin' ||
+      userRole === 'team_lead' ||
+      userRole === 'Team Lead';
+
+    if (isLeadRole) {
+      navItems.push(
+        { path: '/team', icon: UsersRound, label: 'Team' },
+        { path: '/team-overview', icon: Folders, label: 'Team Overview' }
+      );
+    }
+
+    navItems.push({ path: '/files', icon: File, label: 'Files' });
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-gray-50">
-      {/* Sidebar - Desktop */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 bg-white border-r border-gray-200 flex-shrink-0">
-        <div className="h-16 flex items-center px-6 border-b border-gray-200">
+      {/* Main Content + Sticky Notes */}
+      <div className="flex-1 flex flex-col overflow-hidden w-full">
+        {/* Top Bar with Horizontal Nav */}
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 lg:px-8">
+          {/* LEFT: Logo */}
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
               CRM
@@ -239,149 +245,28 @@ export default function CRMLayout() {
               LeadFlow
             </span>
           </div>
-        </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                  isActive
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`
-              }
-            >
-              <item.icon className="w-5 h-5" />
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="p-4 border-t border-gray-200">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white font-medium text-sm">
-              {user?.name
-                ? user.name
-                    .split(' ')
-                    .map((n) => n[0])
-                    .join('')
-                    .slice(0, 2)
-                    .toUpperCase()
-                : 'U'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
-                {user?.name}
-              </p>
-              <p className="text-xs text-gray-500 truncate capitalize">
-                {userRole.replace('_', ' ')}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </button>
-        </div>
-      </aside>
-
-      {/* Mobile Sidebar */}
-      {sidebarOpen && (
-        <>
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-          <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 z-50 lg:hidden flex flex-col">
-            <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
-                  CRM
-                </div>
-                <span className="font-semibold text-gray-900 text-lg">
-                  LeadFlow
-                </span>
-              </div>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          {/* CENTER: Horizontal Navigation (Desktop) */}
+          <nav className="hidden md:flex items-center gap-6">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'text-blue-600 border-b-2 border-blue-600 pb-1'
+                      : 'text-gray-700 hover:text-blue-600'
+                  }`
+                }
               >
-                <X className="w-6 h-6 text-gray-500" />
-              </button>
-            </div>
+                {item.icon && <item.icon className="w-4 h-4" />}
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
 
-            <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setSidebarOpen(false)}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                      isActive
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`
-                  }
-                >
-                  <item.icon className="w-5 h-5" />
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
-
-            <div className="p-4 border-t border-gray-200">
-              <div className="flex items-center gap-3 px-3 py-2">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white font-medium text-sm">
-                  {user?.name
-                    ? user.name
-                        .split(' ')
-                        .map((n) => n[0])
-                        .join('')
-                        .slice(0, 2)
-                        .toUpperCase()
-                    : 'U'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {user?.name}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate capitalize">
-                    {userRole.replace('_', ' ')}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                Logout
-              </button>
-            </div>
-          </aside>
-        </>
-      )}
-
-      {/* Main Content + Sticky Notes */}
-      <div className="flex-1 flex flex-col overflow-hidden w-full">
-        {/* Top Bar */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 lg:px-8">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <Menu className="w-6 h-6 text-gray-700" />
-          </button>
-
-          <div className="flex-1" />
-
+          {/* RIGHT: Notifications + User */}
           <div className="flex items-center gap-4">
             <NotificationBell
               notifications={notifications}
@@ -393,12 +278,59 @@ export default function CRMLayout() {
               }}
               isOpen={bellOpen}
             />
+
+            {/* User Avatar + Menu */}
+            <div className="relative group">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white font-medium text-sm cursor-pointer">
+                {user?.name
+                  ? user.name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase()
+                  : 'U'}
+              </div>
+
+              <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all">
+                <div className="p-3 text-sm text-gray-800 border-b capitalize">
+                  {userRole.replace('_', ' ')}
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Logout
+                </button>
+              </div>
+            </div>
           </div>
         </header>
 
+        {/* Mobile Horizontal Nav */}
+        <nav className="flex md:hidden overflow-x-auto gap-4 px-4 py-3 bg-white border-b">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) =>
+                `flex items-center gap-1 text-sm font-medium whitespace-nowrap ${
+                  isActive
+                    ? 'text-blue-600 border-b-2 border-blue-600 pb-1'
+                    : 'text-gray-700'
+                }`
+              }
+            >
+              {item.icon && <item.icon className="w-4 h-4" />}
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+
         {/* Content row: center page + right notes */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Main page content, centered with max width */}
+          {/* Main page content */}
           <main className="flex-1 overflow-y-auto bg-gray-50">
             <div className="min-h-full w-full px-4 sm:px-6 lg:px-6 py-6">
               <div className="max-w-5xl mx-auto">
@@ -408,10 +340,8 @@ export default function CRMLayout() {
           </main>
 
           {/* Always-visible sticky notes on far right */}
-          {/* if (userRole != 'admin' || userRole === 'team_lead' || userRole === 'Team Lead' || userRole === 'user') */}
-        <div className="w-80 border-l border-gray-200 bg-white flex-shrink-0">
-
-          <StickyNotesPanel />
+          <div className="w-80 border-l border-gray-200 bg-white flex-shrink-0">
+            <StickyNotesPanel />
           </div>
         </div>
       </div>
