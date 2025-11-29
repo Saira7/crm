@@ -84,10 +84,24 @@ export default function CRMLayout() {
       : user.role?.name ?? String(user.role)
     : 'user';
 
-  const handleLogout = () => {
+const handleLogout = () => {
+  try {
+    // Clear any persisted auth if you use it
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+
+    // Clear context state
     setToken(null);
     setUser(null);
-    navigate('/');
+
+    // Go straight to login page
+    navigate('/login', { replace: true });
+  } catch (e) {
+    console.error('Logout error', e);
+    navigate('/login', { replace: true });
+  }
+
+
   };
 
   // ---- Notifications Logic (unchanged) ----
