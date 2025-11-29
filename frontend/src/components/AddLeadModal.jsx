@@ -82,35 +82,56 @@ export default function AddLeadModal({
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const availableAssignees = useMemo(() => {
+    const availableAssignees = useMemo(() => {
     if (!Array.isArray(users)) return [];
 
-    const normalizedRole =
+    const normalizedRoleRaw =
       typeof userRole === 'string' ? userRole : String(userRole || '');
+    const normalizedRole = normalizedRoleRaw.toLowerCase();
 
-    const myTeam =
+    const primaryTeam =
       typeof user?.team === 'string' ? user.team : user?.team?.name;
 
+    // collect all teams this user leads
+    const leadTeamNames = Array.isArray(user?.leadTeams)
+      ? user.leadTeams
+          .map((lt) =>
+            lt.team
+              ? (typeof lt.team === 'string' ? lt.team : lt.team.name)
+              : null
+          )
+          .filter(Boolean)
+      : [];
+
+    const allowedTeamNames = Array.from(
+      new Set([primaryTeam, ...leadTeamNames].filter(Boolean))
+    );
+
+    const getUserTeamName = (u) =>
+      u?.team
+        ? (typeof u.team === 'string' ? u.team : u.team.name)
+        : null;
+
+    // Admin → everyone
     if (normalizedRole === 'admin') return users;
 
-    if (normalizedRole === 'team_lead' || normalizedRole === 'Team Lead') {
-      return users.filter(u => {
-        const uTeam =
-          typeof u.team === 'string' ? u.team : u.team?.name;
-        return uTeam === myTeam;
+    // Team lead → all members of ANY team they lead
+    if (
+      normalizedRole === 'team_lead' ||
+      normalizedRole === 'team lead' ||
+      normalizedRole === 'team-lead'
+    ) {
+      if (!allowedTeamNames.length) return [];
+      return users.filter((u) => {
+        const tName = getUserTeamName(u);
+        return tName && allowedTeamNames.includes(tName);
       });
     }
 
-    // Sales rep can assign to themselves or team leads in same team, if you want:
-    // const teamLeadsSameTeam = users.filter(u => {
-    //   const uTeam = typeof u.team === 'string' ? u.team : u.team?.name;
-    //   const uRole = typeof u.role === 'string' ? u.role : u.role?.name;
-    //   return uTeam === myTeam && (uRole === 'team_lead' || uRole === 'Team Lead');
-    // });
-    // return teamLeadsSameTeam;
-
+    // Regular users: you decided they cannot freely assign, so keep [] (backend will default to self)
     return [];
   }, [users, userRole, user]);
+
 
   const validateMinimum = () => {
     if (!formData.companyName || !formData.companyAddress || !formData.businessNature || !formData.mobile) {

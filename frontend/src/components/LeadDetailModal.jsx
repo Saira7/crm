@@ -138,37 +138,74 @@ export default function LeadDetailModal({
     setEditing(false);
   }, [lead]);
 
-  const userRole = user?.role
+    const userRole = user?.role
     ? (typeof user.role === 'string' ? user.role : user.role.name)
     : null;
+
+  const normRole = (userRole || '').toString().toLowerCase();
+
   const userTeam = user?.team
     ? (typeof user.team === 'string' ? user.team : user.team.name)
     : null;
 
+  // collect all team names this user leads (from junction table)
+  const leadTeamNames = Array.isArray(user?.leadTeams)
+    ? user.leadTeams
+        .map((lt) =>
+          lt.team
+            ? (typeof lt.team === 'string' ? lt.team : lt.team.name)
+            : null
+        )
+        .filter(Boolean)
+    : [];
+
+  // union of primary team + all led teams
+  const allowedTeamNames = Array.from(
+    new Set([userTeam, ...leadTeamNames].filter(Boolean))
+  );
+
+  const getUserTeamName = (u) =>
+    u?.team
+      ? (typeof u.team === 'string' ? u.team : u.team.name)
+      : null;
+
+  const getUserRoleName = (u) =>
+    u?.role
+      ? (typeof u.role === 'string' ? u.role : u.role.name)
+      : null;
+
   const assignableUsers = useMemo(() => {
-    if (!users) return [];
-    if (userRole === 'admin') {
-      return users;
-    } else if (userRole === 'team_lead' || userRole === 'Team Lead') {
-      return users.filter(u => {
-        const uTeam =
-          typeof u.team === 'string' ? u.team : u.team?.name;
-        return uTeam === userTeam;
-      });
-    } else {
-      return users.filter(u => {
-        const uTeam =
-          typeof u.team === 'string' ? u.team : u.team?.name;
-        const uRole =
-          typeof u.role === 'string' ? u.role : u.role?.name;
-        return (
-          u.id === user.id ||
-          ((uRole === 'team_lead' || uRole === 'Team Lead') &&
-            uTeam === userTeam)
-        );
+    if (!Array.isArray(users)) return [];
+
+    // Admin → everyone
+    if (normRole === 'admin') return users;
+
+    // Team Lead → anyone whose team is in ANY team they lead
+    if (
+      normRole === 'team_lead' ||
+      normRole === 'team lead' ||
+      normRole === 'team-lead'
+    ) {
+      if (!allowedTeamNames.length) return [];
+
+      return users.filter((u) => {
+        const tName = getUserTeamName(u);
+        return tName && allowedTeamNames.includes(tName);
       });
     }
-  }, [users, userRole, userTeam, user?.id]);
+
+    // Regular user → themselves OR TL of their primary team (unchanged)
+    return users.filter((u) => {
+      const tName = getUserTeamName(u);
+      const rName = getUserRoleName(u);
+      return (
+        u.id === user.id ||
+        ((rName === 'team_lead' || rName === 'Team Lead') &&
+          tName === userTeam)
+      );
+    });
+  }, [users, normRole, allowedTeamNames, user.id, userTeam]);
+
 
   if (!local) return null;
 

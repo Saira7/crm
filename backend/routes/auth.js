@@ -27,7 +27,12 @@ router.post('/login', async (req, res) => {
             }
           }
         },
-        team: true
+        team: true,
+        leadTeams: {
+      include: {
+        team: true,
+      },
+    },
       }
     });
 
