@@ -168,7 +168,7 @@ export default function FilesPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">File Attachments</h1>
           <p className="text-sm text-gray-500">
-            Upload and manage your personal files (any type).
+            Upload and manage files (any type).
           </p>
         </div>
       </div>
