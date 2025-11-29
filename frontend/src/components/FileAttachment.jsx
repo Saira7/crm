@@ -13,13 +13,38 @@ function formatSize(bytes) {
 }
 
 export default function FilesPage() {
-  const { token } = useContext(AuthContext);
+  const { token, user } = useContext(AuthContext);
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [description, setDescription] = useState('');
+
+  // ----- Role helpers -----
+  const userRoleRaw = user?.role
+    ? typeof user.role === 'string'
+      ? user.role
+      : user.role?.name ?? String(user.role)
+    : 'user';
+
+  const normRole = userRoleRaw.toLowerCase();
+  const isAdmin = normRole === 'admin';
+  const isTeamLead = normRole === 'team_lead' || normRole === 'team lead';
+
+  const headingTitle = isAdmin
+    ? 'All Files'
+    : isTeamLead
+    ? 'Team Files'
+    : 'Your Files';
+
+  const headingSubtitle = isAdmin
+    ? 'View and manage all file attachments in the system.'
+    : isTeamLead
+    ? 'View and manage file attachments for your team.'
+    : 'Upload and manage your own files (any type).';
+
+  const listTitle = headingTitle;
 
   const loadFiles = async () => {
     if (!token) return;
@@ -166,9 +191,9 @@ export default function FilesPage() {
       {/* header */}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">File Attachments</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{headingTitle}</h1>
           <p className="text-sm text-gray-500">
-            Upload and manage files (any type).
+            {headingSubtitle}
           </p>
         </div>
       </div>
@@ -188,7 +213,8 @@ export default function FilesPage() {
             />
             {selectedFile && (
               <p className="text-xs text-gray-500 mt-1">
-                Selected: <span className="font-medium">{selectedFile.name}</span>{' '}
+                Selected:{' '}
+                <span className="font-medium">{selectedFile.name}</span>{' '}
                 ({formatSize(selectedFile.size)})
               </p>
             )}
@@ -223,7 +249,7 @@ export default function FilesPage() {
       {/* list card */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-800">Your Files</h2>
+          <h2 className="text-sm font-semibold text-gray-800">{listTitle}</h2>
           <span className="text-xs text-gray-500">
             {files.length} file{files.length !== 1 ? 's' : ''}
           </span>
@@ -236,7 +262,9 @@ export default function FilesPage() {
 
           {!loading && files.length === 0 && (
             <div className="p-4 text-sm text-gray-500">
-              No files uploaded yet. Use the form above to add your first file.
+              {isAdmin || isTeamLead
+                ? 'No files found yet.'
+                : 'No files uploaded yet. Use the form above to add your first file.'}
             </div>
           )}
 
@@ -256,11 +284,22 @@ export default function FilesPage() {
                     {file.originalName}
                   </button>
                 </div>
+
                 {file.description && (
                   <p className="text-xs text-gray-500 truncate">
                     {file.description}
                   </p>
                 )}
+
+                {/* Owner / Team info for admin & team lead */}
+                {(isAdmin || isTeamLead) && file.user && (
+                  <p className="text-[11px] text-gray-500 mt-0.5 truncate">
+                    Owner: {file.user.name || 'Unknown'}
+                    {file.user.email ? ` • ${file.user.email}` : ''}
+                    {file.user.team?.name ? ` • Team: ${file.user.team.name}` : ''}
+                  </p>
+                )}
+
                 <p className="text-[11px] text-gray-400 mt-0.5">
                   {formatSize(file.size)} •{' '}
                   {file.mimeType || 'Unknown type'} •{' '}
