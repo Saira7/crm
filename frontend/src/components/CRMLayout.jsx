@@ -192,7 +192,9 @@ const handleLogout = () => {
       { path: '/admin-dashboard', label: 'Admin Dashboard', icon: BarChart3 },
       { path: '/team', label: 'Team', icon: UsersRound },
       { path: '/team-overview', label: 'Team Overview', icon: Folders },
-      { path: '/files', label: 'Files', icon: File }
+      { path: '/files', label: 'Files', icon: File },
+      { path: '/leads', label: 'Leads', icon: FileText }
+
     );
   } else {
     navItems.push(
