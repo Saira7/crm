@@ -23,6 +23,7 @@ app.use('/api/auth', authRoutes);
 app.use('/admin', adminRoutes); 
 app.use('/api/notes', require('./routes/notes'));
 app.use('/api/files', filesRouter);
+app.use('/api/admin', adminRoutes);
 
 app.use(
   '/uploads',
