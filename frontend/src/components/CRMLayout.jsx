@@ -84,27 +84,20 @@ export default function CRMLayout() {
       : user.role?.name ?? String(user.role)
     : 'user';
 
-const handleLogout = () => {
-  try {
-    // Clear any persisted auth if you use it
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-
-    // Clear context state
-    setToken(null);
-    setUser(null);
-
-    // Go straight to login page
-    navigate('/login', { replace: true });
-  } catch (e) {
-    console.error('Logout error', e);
-    navigate('/login', { replace: true });
-  }
-
-
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setToken(null);
+      setUser(null);
+      navigate('/login', { replace: true });
+    } catch (e) {
+      console.error('Logout error', e);
+      navigate('/login', { replace: true });
+    }
   };
 
-  // ---- Notifications Logic (unchanged) ----
+  // ---- Notifications Logic ----
   useEffect(() => {
     if (!user?.id || !token) return;
 
@@ -122,8 +115,13 @@ const handleLogout = () => {
           const userTeam =
             typeof user?.team === 'string' ? user.team : user?.team?.name;
 
-          if (userRole.toLowerCase() === 'team_lead' && leadTeam && userTeam)
+          if (
+            userRole.toLowerCase() === 'team_lead' &&
+            leadTeam &&
+            userTeam
+          ) {
             return leadTeam === userTeam;
+          }
 
           return false;
         });
@@ -139,7 +137,9 @@ const handleLogout = () => {
           const msDiff = due - now;
           const diffH = msDiff / (1000 * 60 * 60);
 
-          const msgKey = `due-${lead.id}-${diffH <= 0 ? 'late' : diffH <= 48 ? 'soon' : ''}`;
+          const msgKey = `due-${lead.id}-${
+            diffH <= 0 ? 'late' : diffH <= 48 ? 'soon' : ''
+          }`;
 
           if (diffH < 0) {
             newNotes.push({
@@ -168,7 +168,7 @@ const handleLogout = () => {
           return [...fresh, ...prev].slice(0, 20);
         });
       } catch {
-        // Handle errors silently
+        // fail silently
       }
     };
 
@@ -192,7 +192,8 @@ const handleLogout = () => {
       { path: '/admin-dashboard', label: 'Admin Dashboard', icon: BarChart3 },
       { path: '/team', label: 'Team', icon: UsersRound },
       { path: '/team-overview', label: 'Team Overview', icon: Folders },
-      { path: '/files', label: 'Files', icon: File }
+      { path: '/files', label: 'Files', icon: File },
+      { path: '/leads', label: 'Leads', icon: FileText }
     );
   } else {
     navItems.push(
@@ -215,10 +216,10 @@ const handleLogout = () => {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-gray-50">
+    <div className="flex min-h-screen w-full overflow-hidden bg-gray-50">
       <div className="flex-1 flex flex-col overflow-hidden w-full">
         {/* ---- TOP NAVBAR ---- */}
-        <header className="h-16 bg-white border-b flex items-center justify-between px-6">
+        <header className="h-16 bg-white border-b flex items-center justify-between px-4 sm:px-6">
           {/* Left Logo */}
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold text-sm flex items-center justify-center">
@@ -229,7 +230,7 @@ const handleLogout = () => {
             </span>
           </div>
 
-          {/* Center Nav */}
+          {/* Center Nav (Desktop) */}
           <nav className="hidden md:flex items-center gap-6">
             {navItems.map((item) => (
               <NavLink
@@ -249,8 +250,8 @@ const handleLogout = () => {
             ))}
           </nav>
 
-          {/* Right Section (Notifications + Profile + Logout) */}
-          <div className="flex items-center gap-4">
+          {/* Right Section */}
+          <div className="flex items-center gap-3 sm:gap-4">
             <NotificationBell
               notifications={notifications}
               isOpen={bellOpen}
@@ -263,7 +264,7 @@ const handleLogout = () => {
             />
 
             {/* Profile Avatar */}
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white font-medium flex items-center justify-center">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white font-medium flex items-center justify-center text-xs sm:text-sm">
               {user?.name
                 ? user.name
                     .split(' ')
@@ -277,10 +278,19 @@ const handleLogout = () => {
             {/* Logout Button */}
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200 transition"
+              className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200 transition text-sm font-medium"
             >
               <LogOut className="w-4 h-4" />
-              <span className="text-sm font-medium">Logout</span>
+              <span>Logout</span>
+            </button>
+
+            {/* Compact logout icon for very small screens */}
+            <button
+              onClick={handleLogout}
+              className="sm:hidden p-2 rounded-md bg-gray-100 hover:bg-gray-200 transition"
+              aria-label="Logout"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </header>
@@ -313,7 +323,8 @@ const handleLogout = () => {
             </div>
           </main>
 
-          <div className="w-80 border-l bg-white flex-shrink-0">
+          {/* Sticky notes panel: desktop only */}
+          <div className="hidden md:block w-80 border-l bg-white flex-shrink-0">
             <StickyNotesPanel />
           </div>
         </div>
