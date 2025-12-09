@@ -25,6 +25,10 @@ export default function TeamLeadOverview() {
   const [q, setQ] = useState('');
   const [selectedTeam, setSelectedTeam] = useState('all');
 
+  // NEW: date range filters
+  const [createdFrom, setCreatedFrom] = useState('');
+  const [createdTo, setCreatedTo] = useState('');
+
   const userRole = user?.role
     ? typeof user.role === 'string'
       ? user.role
@@ -95,15 +99,21 @@ export default function TeamLeadOverview() {
     return null;
   };
 
-  // teams this user leads (from /teams.leads)
+  // Teams this user leads (TeamLeadAssignment + primary team)
   const leadTeamIds = useMemo(() => {
     if (!isTeamLeadRole) return [];
-    return teams
-      .filter((t) =>
-        (t.leads || []).some((lt) => lt.userId === user.id)
+
+    const idsFromAssignments = teams
+      .filter(
+        (t) =>
+          Array.isArray(t.leads) &&
+          t.leads.some((lt) => lt.userId === user.id)
       )
       .map((t) => t.id);
-  }, [teams, isTeamLeadRole, user?.id]);
+
+    const fromPrimary = userTeamId ? [userTeamId] : [];
+    return Array.from(new Set([...idsFromAssignments, ...fromPrimary]));
+  }, [teams, isTeamLeadRole, user?.id, userTeamId]);
 
   const leadTeamNames = useMemo(
     () =>
@@ -113,6 +123,7 @@ export default function TeamLeadOverview() {
     [teams, leadTeamIds]
   );
 
+  // Team members
   const teamMembers = useMemo(() => {
     if (normRole === 'admin') {
       if (selectedTeam === 'all') {
@@ -138,13 +149,18 @@ export default function TeamLeadOverview() {
       });
     }
 
-    if (!userTeamId) return [];
-    return users.filter(
-      (u) =>
-        u.id !== user.id &&
-        (u.teamId === userTeamId ||
-          (u.team && (u.team.id === userTeamId || u.team.name === userTeam)))
-    );
+    // fallback for normal users
+    if (!userTeamId && !userTeam) return [];
+    return users.filter((u) => {
+      if (u.id === user.id) return false;
+      const tid = u.teamId || (u.team && u.team.id) || null;
+      const tname = u.team
+        ? typeof u.team === 'string'
+          ? u.team
+          : u.team.name
+        : null;
+      return tid === userTeamId || (userTeam && tname === userTeam);
+    });
   }, [
     users,
     user.id,
@@ -165,16 +181,30 @@ export default function TeamLeadOverview() {
     () =>
       leads.filter((l) => {
         if (l.assignedToId) return false;
-        if (normRole === 'admin') return true;
+
+        if (normRole === 'admin') {
+          if (selectedTeam === 'all') return true;
+          return getLeadTeamName(l) === selectedTeam;
+        }
 
         if (isTeamLeadRole) {
           if (!leadTeamNames.length) return false;
-          return l.teamName && leadTeamNames.includes(l.teamName);
+          const lt = getLeadTeamName(l);
+          return lt && leadTeamNames.includes(lt);
         }
 
-        return l.teamName === userTeam;
+        // normal user
+        return getLeadTeamName(l) === userTeam;
       }),
-    [leads, normRole, userTeam, isTeamLeadRole, leadTeamNames]
+    [
+      leads,
+      normRole,
+      isTeamLeadRole,
+      leadTeamNames,
+      userTeam,
+      selectedTeam,
+      userMap,
+    ]
   );
 
   const rows = useMemo(() => {
@@ -194,36 +224,60 @@ export default function TeamLeadOverview() {
         const isUnassigned =
           !l.assignedToId &&
           (normRole === 'admin'
-            ? true
+            ? selectedTeam === 'all'
+              ? true
+              : getLeadTeamName(l) === selectedTeam
             : isTeamLeadRole
             ? leadTeamNames.length > 0 &&
-              l.teamName &&
-              leadTeamNames.includes(l.teamName)
-            : l.teamName === userTeam);
+              (() => {
+                const lt = getLeadTeamName(l);
+                return lt && leadTeamNames.includes(lt);
+              })()
+            : getLeadTeamName(l) === userTeam);
 
         return isTeammateAssigned || isUnassigned;
       });
     }
 
-    if (normRole === 'admin' && selectedTeam !== 'all') {
-      base = base.filter((l) => getLeadTeamName(l) === selectedTeam);
+    // Text search filter
+    const s = q.trim().toLowerCase();
+    if (s) {
+      base = base.filter((l) =>
+        [
+          l.companyName,
+          l.mobile,
+          l.email,
+          getComment(l),
+          l.status,
+          l.assignedToName,
+        ]
+          .filter(Boolean)
+          .some((field) => field.toLowerCase().includes(s))
+      );
     }
 
-    const s = q.trim().toLowerCase();
-    if (!s) return base;
+    // NEW: date range filter on createdAt
+    if (createdFrom || createdTo) {
+      const fromDate = createdFrom
+        ? new Date(`${createdFrom}T00:00:00`)
+        : null;
+      const toDate = createdTo
+        ? new Date(`${createdTo}T23:59:59.999`)
+        : null;
 
-    return base.filter((l) =>
-      [
-        l.companyName,
-        l.mobile,
-        l.email,
-        getComment(l),
-        l.status,
-        l.assignedToName,
-      ]
-        .filter(Boolean)
-        .some((field) => field.toLowerCase().includes(s))
-    );
+      base = base.filter((l) => {
+        if (!l.createdAt) return false;
+        const created = new Date(l.createdAt);
+        if (Number.isNaN(created.getTime())) return false;
+
+        if (fromDate && created < fromDate) return false;
+        if (toDate && created > toDate) return false;
+
+        return true;
+      });
+    }
+
+    return base;
   }, [
     activeTab,
     leads,
@@ -234,9 +288,10 @@ export default function TeamLeadOverview() {
     userTeam,
     q,
     selectedTeam,
-    userMap,
     isTeamLeadRole,
     leadTeamNames,
+    createdFrom,
+    createdTo,
   ]);
 
   if (!canView) {
@@ -281,16 +336,13 @@ export default function TeamLeadOverview() {
         return getLeadTeamName(l) === selectedTeam;
       }
 
-      if (normRole !== 'admin') {
+      if (isTeamLeadRole) {
+        if (!leadTeamNames.length) return false;
         const lt = getLeadTeamName(l);
-        if (isTeamLeadRole) {
-          if (!leadTeamNames.length) return false;
-          return lt && leadTeamNames.includes(lt);
-        }
-        return !lt || lt === userTeam;
+        return lt && leadTeamNames.includes(lt);
       }
 
-      return true;
+      return getLeadTeamName(l) === userTeam;
     }).length;
   };
 
@@ -298,18 +350,19 @@ export default function TeamLeadOverview() {
     <div className="p-4 lg:p-8 space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 mb-2">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
               Team Overview – {currentTab?.label}
             </h1>
             <p className="text-sm text-gray-500">
               {normRole === 'admin'
-                ? 'Showing items across all teams, filter by team below if needed.'
-                : 'Showing items assigned to your team members and unassigned items for your teams.'}
+                ? 'Showing items across all teams, filter by team or date range below if needed.'
+                : 'Showing items assigned to your team members and unassigned items for the teams you lead.'}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
             {normRole === 'admin' && (
               <select
                 value={selectedTeam}
@@ -324,6 +377,25 @@ export default function TeamLeadOverview() {
                 ))}
               </select>
             )}
+
+            {/* Date range filter */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <input
+                type="date"
+                value={createdFrom}
+                onChange={(e) => setCreatedFrom(e.target.value)}
+                className="px-3 py-2 border rounded-lg text-xs lg:text-sm"
+                title="Created from"
+              />
+              <span className="text-xs text-gray-400">to</span>
+              <input
+                type="date"
+                value={createdTo}
+                onChange={(e) => setCreatedTo(e.target.value)}
+                className="px-3 py-2 border rounded-lg text-xs lg:text-sm"
+                title="Created to"
+              />
+            </div>
 
             <div className="relative">
               <input
