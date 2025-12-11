@@ -29,7 +29,7 @@ function NotificationBell({ notifications, onToggle, isOpen }) {
       >
         <Bell className="w-6 h-6 text-gray-700" />
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full" />
         )}
       </button>
 
@@ -84,27 +84,20 @@ export default function CRMLayout() {
       : user.role?.name ?? String(user.role)
     : 'user';
 
-const handleLogout = () => {
-  try {
-    // Clear any persisted auth if you use it
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-
-    // Clear context state
-    setToken(null);
-    setUser(null);
-
-    // Go straight to login page
-    navigate('/login', { replace: true });
-  } catch (e) {
-    console.error('Logout error', e);
-    navigate('/login', { replace: true });
-  }
-
-
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setToken(null);
+      setUser(null);
+      navigate('/login', { replace: true });
+    } catch (e) {
+      console.error('Logout error', e);
+      navigate('/login', { replace: true });
+    }
   };
 
-  // ---- Notifications Logic (unchanged) ----
+  // ---- Notifications Logic ----
   useEffect(() => {
     if (!user?.id || !token) return;
 
@@ -139,7 +132,9 @@ const handleLogout = () => {
           const msDiff = due - now;
           const diffH = msDiff / (1000 * 60 * 60);
 
-          const msgKey = `due-${lead.id}-${diffH <= 0 ? 'late' : diffH <= 48 ? 'soon' : ''}`;
+          const msgKey = `due-${lead.id}-${
+            diffH <= 0 ? 'late' : diffH <= 48 ? 'soon' : ''
+          }`;
 
           if (diffH < 0) {
             newNotes.push({
@@ -168,7 +163,7 @@ const handleLogout = () => {
           return [...fresh, ...prev].slice(0, 20);
         });
       } catch {
-        // Handle errors silently
+        // ignore errors
       }
     };
 
@@ -194,7 +189,6 @@ const handleLogout = () => {
       { path: '/team-overview', label: 'Team Overview', icon: Folders },
       { path: '/files', label: 'Files', icon: File },
       { path: '/leads', label: 'Leads', icon: FileText }
-
     );
   } else {
     navItems.push(
@@ -220,25 +214,25 @@ const handleLogout = () => {
     <div className="flex h-screen w-screen overflow-hidden bg-gray-50">
       <div className="flex-1 flex flex-col overflow-hidden w-full">
         {/* ---- TOP NAVBAR ---- */}
-        <header className="h-16 bg-white border-b flex items-center justify-between px-6">
+        <header className="h-16 bg-white border-b flex items-center justify-between px-4 sm:px-6">
           {/* Left Logo */}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold text-sm flex items-center justify-center">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold text-sm flex items-center justify-center flex-shrink-0">
               CRM
             </div>
-            <span className="text-lg font-semibold text-gray-900">
+            <span className="text-lg font-semibold text-gray-900 truncate">
               LeadFlow
             </span>
           </div>
 
-          {/* Center Nav */}
+          {/* Center Nav (desktop) */}
           <nav className="hidden md:flex items-center gap-6">
             {navItems.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
-                  `flex items-center gap-2 text-sm font-semibold ${
+                  `flex items-center gap-2 text-sm font-semibold transition-colors ${
                     isActive
                       ? 'text-blue-600 border-b-2 border-blue-600 pb-1'
                       : 'text-gray-700 hover:text-blue-600'
@@ -251,8 +245,8 @@ const handleLogout = () => {
             ))}
           </nav>
 
-          {/* Right Section (Notifications + Profile + Logout) */}
-          <div className="flex items-center gap-4">
+          {/* Right Section */}
+          <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
             <NotificationBell
               notifications={notifications}
               isOpen={bellOpen}
@@ -264,8 +258,8 @@ const handleLogout = () => {
               }}
             />
 
-            {/* Profile Avatar */}
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white font-medium flex items-center justify-center">
+            {/* Avatar (hide text on xs) */}
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white font-medium flex items-center justify-center text-xs sm:text-sm">
               {user?.name
                 ? user.name
                     .split(' ')
@@ -276,27 +270,28 @@ const handleLogout = () => {
                 : 'U'}
             </div>
 
-            {/* Logout Button */}
+            {/* Logout Button (icon-only on very small) */}
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200 transition"
+              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-md bg-gray-100 hover:bg-gray-200 transition text-xs sm:text-sm font-medium"
             >
               <LogOut className="w-4 h-4" />
-              <span className="text-sm font-medium">Logout</span>
+              <span className="hidden xs:inline">Logout</span>
+              <span className="inline xs:hidden">Out</span>
             </button>
           </div>
         </header>
 
-        {/* Mobile Nav */}
-        <nav className="flex md:hidden gap-4 px-4 py-3 bg-white border-b overflow-x-auto">
+        {/* Mobile Nav (below header) */}
+        <nav className="flex md:hidden gap-4 px-3 py-2 bg-white border-b overflow-x-auto">
           {navItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-1 text-sm font-medium whitespace-nowrap ${
+                `flex items-center gap-1 text-xs font-medium whitespace-nowrap px-1 pb-1 ${
                   isActive
-                    ? 'text-blue-600 border-b-2 border-blue-600 pb-1'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
                     : 'text-gray-700'
                 }`
               }
@@ -308,14 +303,16 @@ const handleLogout = () => {
         </nav>
 
         {/* Main content + sticky notes */}
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
+          {/* Main content */}
           <main className="flex-1 overflow-y-auto bg-gray-50">
-            <div className="max-w-5xl mx-auto px-4 py-6">
+            <div className="max-w-5xl mx-auto px-4 py-4 sm:py-6">
               <Outlet />
             </div>
           </main>
 
-          <div className="w-80 border-l bg-white flex-shrink-0">
+          {/* Sticky notes – desktop only to avoid mobile cramp */}
+          <div className="hidden lg:block w-80 border-l bg-white flex-shrink-0">
             <StickyNotesPanel />
           </div>
         </div>
